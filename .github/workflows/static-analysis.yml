@@ -48,7 +48,7 @@ jobs:
           basedpyright formaltask/ || echo "Pyright found type errors (non-blocking for now)"
 
       - name: Upload Pyright results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: pyright-results
@@ -90,7 +90,7 @@ jobs:
           fi
 
       - name: Upload Semgrep results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: semgrep-results
@@ -189,7 +189,7 @@ jobs:
           mutmut html || echo "Could not generate HTML report"
 
       - name: Upload mutation results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: always()
         with:
           name: mutation-report
