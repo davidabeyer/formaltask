@@ -39,7 +39,7 @@ jobs:
       # DISABLED: testmon caching disabled - testmon hangs in CI
       # - name: Cache testmon data
       #   if: github.event_name != 'schedule' && github.event.inputs.full_test != 'true'
-      #   uses: actions/cache@v4
+      #   uses: actions/cache@v5
       #   with:
       #     path: .testmondata
       #     key: testmon-${{ runner.os }}-${{ github.event.pull_request.base.sha || github.sha }}
@@ -118,7 +118,7 @@ jobs:
           extra-packages: 'pytest hypothesis'
 
       - name: Cache Hypothesis examples
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .hypothesis
           key: hypothesis-${{ runner.os }}-${{ hashFiles('tests/property/**/*.py') }}
