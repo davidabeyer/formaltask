@@ -1,0 +1,4 @@
+#!/bin/bash
+# Pre-merge-commit hook: Block merges when task is not completed
+set -e
+python3 -m formaltask.tasks.status

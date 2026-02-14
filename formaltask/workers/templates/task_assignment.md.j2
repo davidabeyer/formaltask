@@ -1,0 +1,38 @@
+<task_assignment>
+# Task #{{ id }}: {{ title }}
+
+**SCOPE: This task only. Other PRP tasks are context, not assignments.**
+{%- if acceptance_criteria %}
+
+## Acceptance Criteria
+{%- for criterion in acceptance_criteria %}
+{%- if criterion is mapping %}
+- {{ criterion.text }}
+{%- else %}
+- {{ criterion }}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- if verification_section %}
+
+{{ verification_section }}
+{%- endif %}
+{%- if description and not artifact_content %}
+
+## Description
+{{ description }}
+{%- endif %}
+{%- if artifact_content %}
+
+## {{ artifact_type }}
+{{ artifact_content }}
+{%- endif %}
+{%- if skills %}
+
+## Recommended Skills
+Invoke these skills when relevant to your work:
+{%- for skill in skills %}
+- `/{{ skill }}` - invoke when needed
+{%- endfor %}
+{%- endif %}
+</task_assignment>

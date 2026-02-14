@@ -1,0 +1,525 @@
+#!/bin/bash
+# Unified pre-commit hook
+
+# ============================================================================
+# Configuration (override via environment variables)
+# ============================================================================
+
+# Thresholds
+DOC_MODIFICATION_THRESHOLD="${DOC_MODIFICATION_THRESHOLD:-20}"
+PIP_AUDIT_MAX_LINES="${PIP_AUDIT_MAX_LINES:-50}"
+
+# Paths
+API_BASELINE_DIR="${API_BASELINE_DIR:-.claude/api-baseline}"
+TSCONFIG_FILE="${TSCONFIG_FILE:-tsconfig.json}"
+
+# Color codes for clear status reporting
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# ============================================================================
+# Mode Detection and Error Accumulation
+# ============================================================================
+
+# Mode detection: PRE_COMMIT_MODE can be set externally
+# - interactive: prompts user on errors (default with TTY)
+# - batch: collects all errors, reports at end (default without TTY)
+if [ -z "$PRE_COMMIT_MODE" ]; then
+    # Check stdout (-t 1) for interactive mode since we need output capability
+    if [ -t 1 ]; then
+        PRE_COMMIT_MODE="interactive"
+    else
+        PRE_COMMIT_MODE="batch"
+    fi
+fi
+
+# Fail-fast mode: exit on first error
+FAIL_FAST="${FAIL_FAST:-0}"
+
+# Error tracking arrays
+declare -a ERRORS=()
+declare -a WARNINGS=()
+FINAL_EXIT_CODE=0
+
+# Record an error or warning
+# Usage: record_error "check_name" "message" ["error"|"warning"]
+record_error() {
+    local check_name="$1"
+    local message="$2"
+    local severity="${3:-error}"
+
+    if [[ "$severity" == "error" ]]; then
+        ERRORS+=("[$check_name] $message")
+        FINAL_EXIT_CODE=1
+        if [[ "$FAIL_FAST" == "1" ]]; then
+            echo -e "${RED}[fail-fast] Stopping on first error${NC}"
+            exit 1
+        fi
+    else
+        WARNINGS+=("[$check_name] $message")
+    fi
+}
+
+# Print summary of all errors (batch mode only)
+print_summary() {
+    if [[ "$PRE_COMMIT_MODE" != "batch" ]]; then
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BLUE}═══════════════════════════════════════${NC}"
+    echo -e "${BLUE}         PRE-COMMIT SUMMARY            ${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════${NC}"
+    echo -e "Mode: ${PRE_COMMIT_MODE}"
+
+    if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+        echo ""
+        echo -e "${YELLOW}Warnings (${#WARNINGS[@]}):${NC}"
+        for warn in "${WARNINGS[@]}"; do
+            echo -e "  ${YELLOW}⚠${NC} $warn"
+        done
+    fi
+
+    if [[ ${#ERRORS[@]} -gt 0 ]]; then
+        echo ""
+        echo -e "${RED}ERRORS (${#ERRORS[@]}):${NC}"
+        for err in "${ERRORS[@]}"; do
+            echo -e "  ${RED}✗${NC} $err"
+        done
+        echo ""
+        echo -e "${RED}Commit blocked - ${#ERRORS[@]} errors collected${NC}"
+    else
+        echo ""
+        echo -e "${GREEN}✓ All checks passed${NC}"
+    fi
+    echo ""
+}
+
+echo -e "${BLUE}Mode: ${PRE_COMMIT_MODE}${NC}"
+
+# ============================================================================
+# Helper Functions (extracted for reduced complexity)
+# ============================================================================
+
+# Check if a command is available
+# Usage: check_command_available "command_name" "install_hint"
+# Returns 0 if available, 1 if not (with message)
+check_command_available() {
+    local cmd="$1"
+    local install_hint="$2"
+    if ! command -v "$cmd" &> /dev/null; then
+        echo -e "  ${YELLOW}⊘${NC} $cmd not installed ($install_hint)"
+        return 1
+    fi
+    return 0
+}
+
+# Find the requirements file to scan for dependency auditing
+# Outputs the path to stdout, returns 1 if not found
+# Warning message goes to stderr to avoid corrupting captured output
+find_requirements_file() {
+    if [ -f "requirements.txt" ]; then
+        echo "requirements.txt"
+        return 0
+    elif [ -f "requirements/base.txt" ]; then
+        echo "requirements/base.txt"
+        return 0
+    fi
+    echo -e "  ${YELLOW}⊘${NC} No requirements.txt found to audit" >&2
+    return 1
+}
+
+# PHASE 0.4: Ruff linting and formatting
+ruff_check() {
+    echo ""
+    echo -e "${BLUE}Running ruff...${NC}"
+
+    check_command_available "ruff" "pip install ruff" || return 0
+
+    # Get staged Python files in formaltask/ (matches pyproject.toml scope)
+    staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep '^formaltask/.*\.py$' || true)
+    if [ -z "$staged_py" ]; then
+        echo -e "  ${GREEN}✓${NC} No formaltask/ Python files staged"
+        return 0
+    fi
+
+    # Run linter on staged files only (not all of formaltask/)
+    # shellcheck disable=SC2086
+    if ! ruff check $staged_py --fix --exit-non-zero-on-fix; then
+        record_error "ruff" "Linting errors (unfixable or unstaged fixes)"
+        return 1
+    fi
+
+    # Run formatter check on staged files only
+    # shellcheck disable=SC2086
+    if ! ruff format $staged_py --check; then
+        record_error "ruff-format" "Formatting errors (run: ruff format formaltask/)"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} Ruff checks passed"
+}
+
+# PHASE 0.5: Documentation guard check
+# README.md = detailed human documentation (primary target)
+# CLAUDE.md = concise agent summaries (auto-generated, not manually updated)
+doc_guard_check() {
+    # Allow explicit bypass via environment variable
+    if [[ "${SKIP_DOC_GUARD:-}" == "1" ]]; then
+        echo -e "  ${YELLOW}⊘${NC} Doc-guard skipped (SKIP_DOC_GUARD=1)"
+        return 0
+    fi
+
+    local staged=$(git diff --cached --name-only)
+    # Use native Bash regex instead of echo|grep for performance
+    # Match README.md followed by end-of-line or end-of-string
+    if [[ "$staged" =~ README\.md($|$'\n') ]]; then
+        return 0
+    fi
+
+    # Filter doc areas to only include substantial changes
+    # - New files (A): Always flag
+    # - Modified files (M): Only flag if >= threshold lines
+    # - Backup files (.bak, .backup): Never flag (not source code)
+    local substantial_doc_areas=""
+    while IFS=$'\t' read -r status file; do
+        [[ -z "$file" ]] && continue
+        # Skip backup files - they're not source code
+        if echo "$file" | grep -qE '\.(bak|backup)$'; then
+            continue
+        fi
+        # Only check documented areas
+        if ! echo "$file" | grep -qE '^(formaltask/|hooks/session_end/|hooks/session_start/|hooks/cli/|\.claude/skills/|\.claude/commands/|\.claude/agents/)'; then
+            continue
+        fi
+        case "$status" in
+            A)  # New file - always substantial
+                substantial_doc_areas="${substantial_doc_areas}${file}\n"
+                ;;
+            D)  # Deleted file - always substantial
+                substantial_doc_areas="${substantial_doc_areas}${file}\n"
+                ;;
+            M)  # Modified - check line count threshold
+                local lines_added=$(git diff --cached --numstat -- "$file" 2>/dev/null | awk '{print $1}')
+                if [[ "$lines_added" =~ ^[0-9]+$ ]] && [ "$lines_added" -ge "$DOC_MODIFICATION_THRESHOLD" ]; then
+                    substantial_doc_areas="${substantial_doc_areas}${file}\n"
+                fi
+                ;;
+        esac
+    done < <(git diff --cached --name-status)
+
+    if [[ -n "$substantial_doc_areas" ]]; then
+        echo ""
+        echo -e "${BLUE}📝 Documentation checkpoint:${NC} Changes in documented areas:"
+        echo -e "$substantial_doc_areas"
+        echo -e "${YELLOW}No README.md changes detected.${NC}"
+        echo ""
+
+        # Mode-aware handling
+        if [[ "$PRE_COMMIT_MODE" == "batch" ]]; then
+            # Batch mode: record error and continue
+            record_error "doc_guard" "Changes in documented areas without README.md update"
+        elif [[ "$PRE_COMMIT_MODE" == "interactive" ]] && [ -t 1 ]; then
+            # Interactive mode: prompt user (check stdout for TTY)
+            # Use -r to prevent backslash interpretation in user input
+            read -r -p "Continue without updating README.md? (y/n) " -n 1
+            echo
+            # Validate REPLY is set and matches expected pattern (empty REPLY = abort)
+            if [[ -z "${REPLY:-}" ]] || [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo ""
+                echo -e "${RED}Commit aborted.${NC} Update README.md or use --no-verify to skip."
+                echo ""
+                exit 1
+            fi
+        else
+            # Non-interactive mode (CI/scripts) - block by default for safety
+            echo "Commit aborted. Update README.md or use --no-verify to skip."
+            exit 1
+        fi
+    fi
+}
+
+# PHASE 0.6: Test impact check (testmon)
+# TODO(Task #2640): testmon validator deleted; this function is now a no-op.
+# Kept for future pytest-testmon CI integration (see .github/workflows/test.yml).
+test_impact_check() {
+    # Bootstrap check - skip if .testmondata doesn't exist
+    if [ ! -f ".testmondata" ] && [ ! -f "$HOME/.testmondata" ]; then
+        return 0
+    fi
+
+    # Get staged Python source files (excluding tests)
+    staged_py=$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' | grep -v '/tests/' | grep -v 'conftest\.py' || true)
+
+    if [ -z "$staged_py" ]; then
+        return 0  # No source files staged
+    fi
+
+    # Check if any test files are staged
+    staged_tests=$(git diff --cached --name-only --diff-filter=ACM | grep '/tests/' | grep '\.py$' || true)
+
+    if [ -n "$staged_tests" ]; then
+        return 0  # Tests are staged, allow
+    fi
+
+    return 0
+}
+
+# PHASE 0.65: Secret detection check (detect-secrets)
+secret_detection_check() {
+    echo ""
+    echo -e "${BLUE}Scanning for secrets...${NC}"
+
+    # Graceful degradation if detect-secrets not installed
+    check_command_available "detect-secrets" "pip install detect-secrets" || return 0
+
+    # Get staged files
+    staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+    if [ -z "$staged_files" ]; then
+        echo -e "  ${GREEN}✓${NC} No files to scan"
+        return 0
+    fi
+
+    # Check if baseline exists
+    if [ ! -f ".secrets.baseline" ]; then
+        echo -e "  ${YELLOW}⊘${NC} No .secrets.baseline found (run: detect-secrets scan > .secrets.baseline)"
+        return 0
+    fi
+
+    # Run detect-secrets-hook on staged files
+    # Use tr to convert newlines to null bytes, then xargs -0 for safe filename handling (portable across BSD/GNU)
+    # Note: Do not suppress stderr (2>/dev/null) - errors should be visible for debugging
+    if ! echo "$staged_files" | tr '\n' '\0' | xargs -0 detect-secrets-hook --baseline .secrets.baseline; then
+        record_error "secrets" "Potential secrets detected in staged files"
+        echo -e "  ${RED}✗${NC} Found potential secret(s)"
+        echo -e "  Run: ${YELLOW}detect-secrets audit .secrets.baseline${NC}"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} No secrets detected"
+    return 0
+}
+
+# PHASE 0.66: Dependency vulnerability audit (pip-audit)
+dependency_audit_check() {
+    # Check if any dependency files are staged
+    staged_deps=$(git diff --cached --name-only | grep -E '(requirements.*\.txt|pyproject\.toml|setup\.py)' || true)
+    if [ -z "$staged_deps" ]; then
+        return 0  # No dependency files changed
+    fi
+
+    echo ""
+    echo -e "${BLUE}Checking dependency vulnerabilities...${NC}"
+
+    # Graceful degradation if pip-audit not installed
+    check_command_available "pip-audit" "pip install pip-audit" || return 0
+
+    # Find the requirements file to scan
+    local req_file
+    req_file=$(find_requirements_file) || return 0
+
+    # Run pip-audit with configurable output limit and truncation warning
+    echo -e "  Running pip-audit on $req_file..."
+    local output
+    local exit_code
+    output=$(pip-audit --strict --progress-spinner off -r "$req_file" 2>&1) || exit_code=$?
+    exit_code=${exit_code:-0}
+
+    # Count output lines and show with truncation warning if needed
+    local line_count
+    line_count=$(echo "$output" | wc -l | tr -d ' ')
+    if [ "$line_count" -gt "$PIP_AUDIT_MAX_LINES" ]; then
+        echo "$output" | head -n "$PIP_AUDIT_MAX_LINES"
+        local remaining=$((line_count - PIP_AUDIT_MAX_LINES))
+        echo -e "  ${YELLOW}... $remaining more lines truncated (set PIP_AUDIT_MAX_LINES to see more)${NC}"
+    else
+        echo "$output"
+    fi
+
+    if [ "$exit_code" -ne 0 ]; then
+        record_error "pip-audit" "Known vulnerabilities in dependencies"
+        echo -e "  ${RED}✗${NC} Vulnerabilities found"
+        return 1
+    fi
+
+    echo -e "  ${GREEN}✓${NC} No known vulnerabilities"
+    return 0
+}
+
+# PHASE 0.7: Stub detection check
+stub_check() {
+    echo ""
+    echo -e "${BLUE}Checking for stub functions...${NC}"
+
+    # Get staged Python files (Added, Copied, Modified - not Deleted)
+    staged_py="$(git diff --cached --name-only --diff-filter=ACM | grep '\.py$' || true)"
+
+    if [ -z "$staged_py" ]; then
+        echo -e "  ${GREEN}✓${NC} No Python files staged"
+        return 0
+    fi
+
+    # Determine project root for imports (supports worktrees)
+    PROJECT_PATH="${PROJECT_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+
+    # Run stub detector on staged files
+    # Use 'while IFS= read -r' to handle filenames with spaces safely
+    violations=""
+    while IFS= read -r file; do
+        [ -z "$file" ] && continue
+        if [ -f "$file" ]; then
+            # Pass filename and project path via environment variables to prevent command injection
+            result=$(STUB_CHECK_FILE="$file" PROJECT_PATH="$PROJECT_PATH" python3 -c "
+import sys
+import os
+sys.path.insert(0, os.environ.get('PROJECT_PATH', '.'))
+from formaltask.validators.stub_detector import detect_stubs
+from pathlib import Path
+
+file_path = os.environ.get('STUB_CHECK_FILE', '')
+if file_path:
+    for v in detect_stubs(Path(file_path)):
+        print(f'{v.file}:{v.line}: {v.function}() is a stub ({v.pattern})')
+" 2>&1)
+            if [ -n "$result" ]; then
+                violations="$violations$result\n"
+            fi
+        fi
+    done <<< "$staged_py"
+
+    if [ -n "$violations" ]; then
+        echo ""
+        echo -e "${YELLOW}Stub functions detected:${NC}"
+        echo -e "$violations"
+        echo ""
+        echo -e "${YELLOW}Add '# STUB: reason' comment to acknowledge${NC}"
+        echo ""
+
+        # Interactive prompt (check stdout for TTY)
+        # Use -r to prevent backslash interpretation in user input
+        if [ -t 1 ]; then
+            read -r -p "Continue with commit? (y/n) " -n 1
+            echo
+            # Validate REPLY is set and matches expected pattern (empty REPLY = abort)
+            if [[ -z "${REPLY:-}" ]] || [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                echo -e "${RED}Commit aborted.${NC}"
+                exit 1
+            fi
+        else
+            # Non-interactive mode (CI) - warn but don't block
+            echo -e "${YELLOW}Warning: Stubs detected in non-interactive mode${NC}"
+        fi
+    else
+        echo -e "  ${GREEN}✓${NC} No stub functions found"
+    fi
+}
+
+# PHASE 0.8: API stability check (Griffe)
+api_stability_check() {
+    # Use PROJECT_ROOT for worktree support with path validation
+    local api_stability_script="${PROJECT_ROOT:-$(pwd)}/hooks/api-stability-check.sh"
+    if [[ -f "$api_stability_script" && "$api_stability_script" == "${PROJECT_ROOT:-$(pwd)}"/* ]]; then
+        echo ""
+        echo -e "${BLUE}Checking API stability...${NC}"
+        if ! bash "$api_stability_script"; then
+            echo ""
+            echo -e "${RED}COMMIT BLOCKED - Breaking API changes detected${NC}"
+            echo -e "${YELLOW}To update baseline after intentional changes:${NC}"
+            echo -e "  PYTHONPATH=\"\$PWD\" griffe dump formaltask -d google -o .claude/api-baseline/formaltask.json"
+            echo ""
+            exit 1
+        fi
+        echo -e "  ${GREEN}✓${NC} API stability check passed"
+    fi
+}
+
+# Run ruff linting first (fast, catches most issues)
+ruff_check
+
+# Run doc-guard check
+doc_guard_check
+
+# Run test impact check
+test_impact_check
+
+# Run secret detection check
+secret_detection_check
+
+# Run dependency vulnerability audit
+dependency_audit_check
+
+# Run stub check
+stub_check
+
+# NOTE: Mutation testing removed from pre-commit (too slow)
+# Mutation testing runs in CI instead - see .github/workflows/static-analysis.yml
+
+# Run API stability check
+api_stability_check
+
+# Check for unsafe worktree markers
+if [ -f ".DO_NOT_COMMIT" ]; then
+    echo ""
+    echo -e "${RED}❌ COMMIT BLOCKED - UNSAFE WORKTREE${NC}"
+    echo ""
+    cat .DO_NOT_COMMIT
+    echo ""
+    echo -e "${YELLOW}Reason: This worktree is marked unsafe for commits${NC}"
+    echo -e "${YELLOW}Action: Fix the worktree or delete it${NC}"
+    echo ""
+    exit 1
+fi
+
+# Note: Auto-sync has been moved to pre-merge and pre-push hooks
+# Commits are now lightweight and fast - sync happens before merge/push
+
+# PHASE 0.9: TypeScript check (tsc)
+typescript_check() {
+    # Get staged TypeScript files
+    staged_ts="$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' || true)"
+
+    if [ -z "$staged_ts" ]; then
+        return 0  # No TypeScript files staged
+    fi
+
+    # Check if tsconfig exists (uses TSCONFIG_FILE from configuration)
+    if [ ! -f "$TSCONFIG_FILE" ]; then
+        echo -e "  ${YELLOW}⊘${NC} TypeScript files staged but no $TSCONFIG_FILE found"
+        return 0
+    fi
+
+    echo ""
+    echo -e "${BLUE}Checking TypeScript types...${NC}"
+
+    # Run TypeScript compiler in check mode
+    if npx tsc --noEmit 2>&1; then
+        echo -e "  ${GREEN}✓${NC} TypeScript type check passed"
+        return 0
+    else
+        echo ""
+        echo -e "${RED}COMMIT BLOCKED - TypeScript errors detected${NC}"
+        echo -e "${YELLOW}Fix TypeScript errors before committing${NC}"
+        echo ""
+        exit 1
+    fi
+}
+
+# Run TypeScript check
+typescript_check
+
+# PHASE 1: Property test validation
+property_validator="${PROJECT_ROOT:-$(pwd)}/hooks/property-test-validator.sh"
+if [[ -f "$property_validator" && "$property_validator" == "${PROJECT_ROOT:-$(pwd)}"/* ]]; then
+    bash "$property_validator" || exit 1
+fi
+
+# NOTE: Commit message validation moved to commit-msg hook
+# This fixes the stale COMMIT_EDITMSG issue where pre-commit reads
+# the previous commit's message instead of the current one.
+
+# Print summary (batch mode) and exit with appropriate code
+print_summary
+exit $FINAL_EXIT_CODE

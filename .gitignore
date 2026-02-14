@@ -1,0 +1,66 @@
+# Secrets
+.env
+*.key
+settings.local.json
+
+# Databases
+*.db
+*.db-shm
+*.db-wal
+*.db.backup*
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+
+# Task metadata (worktree-only)
+/.task/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+
+# Testing
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+.testmondata
+coverage.json
+
+# Linting
+.ruff_cache/
+.mypy_cache/
+
+# Build
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# Node
+node_modules/
+
+# Temp
+tmp/
+*.tmp
+*.backup
+
+# Claude Code local config
+.claude/*
+!.claude/skills/
+!.claude/skills/**
+!.claude/tdd-guard/
+!.claude/tdd-guard/**
+.claude/tdd-guard/data/*.json
+.claude/tdd-guard/data/*.jsonl
+.claude/tdd-guard/state

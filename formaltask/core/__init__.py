@@ -1,0 +1,1 @@
+"""FormalTask core module."""

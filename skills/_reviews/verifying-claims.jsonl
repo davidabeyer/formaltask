@@ -1,0 +1,2 @@
+{"date": "2026-01-24", "skill": "verifying-claims", "quality": "Exactly right", "gap": null}
+{"date": "2026-01-25", "skill": "verifying-claims", "suggestions": ["Check global/parent CLI flags not just command parser", "Read function bodies before claiming similarity", "Verify during audit not after"], "rating": "confirmed", "additions": null, "skipped": false}

@@ -1,0 +1,25 @@
+# Doc-Guard Configuration
+# Single source of truth for documented areas and their README.md targets
+# Note: CLAUDE.md files are concise quick-reference (auto-loaded)
+# README.md files contain detailed documentation (read on-demand)
+version: 1
+
+documented_areas:
+  # Session workers -> detailed docs in hooks/session_end/README.md
+  - pattern: "hooks/session_end/"
+    target: "hooks/session_end/README.md"
+
+  # Session start hooks -> detailed docs in hooks/README.md
+  - pattern: "hooks/session_start/"
+    target: "hooks/README.md"
+
+  # Claude Code configuration -> detailed docs in respective README.md
+  - pattern: ".claude/skills/"
+    target: "skills/README.md"
+  - pattern: ".claude/commands/"
+    target: "commands/README.md"
+  - pattern: ".claude/agents/"
+    target: ".claude/README.md"
+
+settings:
+  modification_threshold: 20

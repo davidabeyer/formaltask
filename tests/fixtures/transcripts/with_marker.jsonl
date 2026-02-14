@@ -1,0 +1,2 @@
+{"type": "human", "message": {"content": "Please complete the task"}}
+{"type": "assistant", "message": {"content": "I've completed the task successfully.\n\n<!-- WORKER_STATUS: COMPLETED -->"}}

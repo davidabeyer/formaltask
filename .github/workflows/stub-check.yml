@@ -1,0 +1,78 @@
+# Stub Detection - Block PRs with unintentional stub functions
+# Reuses formaltask/validators/stub_detector.py logic (zero duplication)
+# Escape hatch: Add "# STUB: reason" comment above function
+
+name: Stub Check
+
+on:
+  pull_request:
+    paths:
+      - '**.py'
+
+jobs:
+  stub-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history for git diff
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: '3.11'
+          extra-packages: ''
+
+      - name: Install local package
+        run: pip install -e .
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.base_ref }}
+
+      - name: Check for stubs in changed files
+        run: |
+          import sys
+          from pathlib import Path
+
+          # Import from formaltask package
+          from formaltask.validators.stub_detector import detect_stubs
+
+          # Get changed Python files
+          import subprocess
+          result = subprocess.run(
+              ['git', 'diff', '--name-only', '--diff-filter=ACMR',
+               f'origin/${{ github.base_ref }}...HEAD'],
+              capture_output=True, text=True
+          )
+          changed_files = [f for f in result.stdout.strip().split('\n') if f.endswith('.py')]
+
+          violations = []
+          for filepath in changed_files:
+              path = Path(filepath)
+              if not path.exists():
+                  continue  # Skip deleted files
+
+              for violation in detect_stubs(path):
+                  violations.append(violation)
+                  if len(violations) >= 10:
+                      break
+              if len(violations) >= 10:
+                  break
+
+          if violations:
+              print("::error::Stub functions detected! Add '# STUB: reason' marker or implement the function.")
+              print()
+              for v in violations:
+                  location = f"{v.file}:{v.line}"
+                  if v.parent_class:
+                      print(f"::error file={v.file},line={v.line}::{v.parent_class}.{v.function}() - {v.pattern}")
+                  else:
+                      print(f"::error file={v.file},line={v.line}::{v.function}() - {v.pattern}")
+              if len(violations) == 10:
+                  print()
+                  print("::warning::Showing first 10 violations only")
+              sys.exit(1)
+          else:
+              print("No stub violations found.")
+        shell: python

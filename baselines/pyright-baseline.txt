@@ -1,0 +1,74 @@
+# Pyright Type Error Baseline
+# Generated: 2025-12-18 19:16:05 UTC
+# Tool: basedpyright (pyright fork with baseline support)
+# Config: typeCheckingMode = "standard"
+
+## Summary
+
+Total baselined errors: 527
+New errors (not baselined): 0
+
+## Error Categories (Current Baseline)
+
+| Category | Count | Priority | Action |
+|----------|-------|----------|--------|
+| reportArgumentType | 169 | P1 | Add type annotations or casts |
+| reportUnusedImport | 124 | P3 | STALE - disabled in favor of Ruff F401 |
+| reportAttributeAccessIssue | 86 | P2 | Add type hints or use Protocol |
+| reportUnusedVariable | 65 | P3 | Remove or prefix with _ |
+| reportOptionalMemberAccess | 21 | P1 | Add null checks before access |
+| reportPossiblyUnboundVariable | 16 | P1 | Initialize variables or restructure |
+| reportOperatorIssue | 9 | P2 | Add type hints for operators |
+| reportInvalidStringEscapeSequence | 8 | P2 | Use raw strings r"..." |
+| reportCallIssue | 7 | P2 | Fix function signatures |
+| reportOptionalSubscript | 6 | P1 | Add null checks before subscript |
+| reportReturnType | 6 | P0 | Fix - function returns don't match |
+| reportFunctionMemberAccess | 5 | P2 | Add type hints |
+| reportGeneralTypeIssues | 2 | P0 | Investigate - may indicate logic errors |
+| reportOptionalCall | 1 | P1 | Add null check before call |
+| reportUndefinedVariable | 1 | P0 | Fix immediately - actual undefined name |
+| reportUnusedExpression | 1 | P3 | Remove or use result |
+
+## Configuration (pyproject.toml)
+
+```toml
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+venv = ".venv"
+reportUnusedImport = "none"  # Ruff F401 handles this
+reportUnusedVariable = "error"
+reportMissingTypeStubs = false
+reportMissingImports = "error"  # venv config resolves imports
+baselineFile = "baselines/pyright-baseline.json"
+```
+
+## Pre-commit Integration
+
+Hook configured in .pre-commit-config.yaml:
+- id: basedpyright
+- language: system
+- pass_filenames: false
+
+## Recommended Fix Order
+
+1. **P0 Critical** (9 errors): reportUndefinedVariable, reportReturnType, reportGeneralTypeIssues
+2. **P1 High** (213 errors): reportArgumentType, reportOptionalMemberAccess, reportOptionalSubscript, reportOptionalCall, reportPossiblyUnboundVariable
+3. **P2 Medium** (115 errors): reportAttributeAccessIssue, reportOperatorIssue, reportCallIssue, reportFunctionMemberAccess, reportInvalidStringEscapeSequence
+4. **P3 Low** (66 errors): reportUnusedVariable, reportUnusedExpression (reportUnusedImport disabled)
+
+## Escape Hatches
+
+- Single error: `# type: ignore[reportArgumentType]`
+- Entire file: Add to pyproject.toml `exclude` list
+- All of type: Set `reportXxx = "none"` in pyproject.toml
+
+## Files with Most Errors
+
+Run: `jq -r '.files | to_entries | map({file: .key, count: .value | length}) | sort_by(-.count) | .[0:10] | .[] | "\(.count)\t\(.file)"' baselines/pyright-baseline.json`
+
+## CI Enforcement
+
+- Pre-commit hook runs basedpyright on all Python files
+- Baseline comparison ensures no NEW errors are introduced
+- New errors will fail the pre-commit check

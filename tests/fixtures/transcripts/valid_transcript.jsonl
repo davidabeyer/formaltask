@@ -1,0 +1,4 @@
+{"type": "human", "message": {"content": "Hello, can you help me with this code?"}}
+{"type": "assistant", "message": {"content": "Of course! Let me take a look at what you need."}}
+{"type": "human", "message": {"content": "I need to parse JSON files."}}
+{"type": "assistant", "message": {"content": "I can help you with that. Here's how to parse JSON files in Python."}}

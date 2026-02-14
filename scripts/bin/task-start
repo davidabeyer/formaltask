@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+#
+# task-start - Create git worktree bound to a FormalTask task
+#
+# Usage:
+#   task-start <task_id>
+#
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+    echo "Usage: task-start <task_id>" >&2
+    exit 1
+fi
+
+task_id="$1"
+
+# Validate task_id is integer
+if ! [[ "$task_id" =~ ^[0-9]+$ ]]; then
+    echo "Error: task_id must be an integer" >&2
+    exit 1
+fi
+
+# Get main repo path
+main_repo=$(git rev-parse --show-toplevel 2>/dev/null) || {
+    echo "Error: Not in a git repository" >&2
+    exit 1
+}
+
+# Find database path
+db_path="${PROJECT_ROOT:-$main_repo}/.claude/formaltask.db"
+if [ ! -f "$db_path" ]; then
+    echo "Error: Database not found: $db_path" >&2
+    exit 1
+fi
+
+# Query task title for branch naming
+task_title=$(sqlite3 "$db_path" "SELECT title FROM tasks WHERE id = $task_id" 2>/dev/null)
+if [ -z "$task_title" ]; then
+    echo "Error: Task $task_id not found" >&2
+    exit 1
+fi
+
+# Generate slug from title (lowercase, replace non-alphanumeric with dash, max 30 chars)
+slug=$(echo "$task_title" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//;s/-$//' | cut -c1-30)
+
+# Branch and worktree names
+branch="task-${task_id}-${slug}"
+worktree_path="$main_repo/../$branch"
+
+# Check if branch exists
+if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
+    # Use existing branch
+    git worktree add "$worktree_path" "$branch" 2>/dev/null || true
+else
+    # Create new branch
+    git worktree add "$worktree_path" -b "$branch" 2>/dev/null || {
+        echo "Error: Failed to create worktree" >&2
+        exit 1
+    }
+fi
+
+# Create .task/ binding directory
+mkdir -p "$worktree_path/.task"
+echo "$task_id" > "$worktree_path/.task/id"
+echo "$main_repo" > "$worktree_path/.task/project_root"
+
+# Query and write epic name for session grouping
+epic_name=$(sqlite3 "$db_path" "SELECT epic_name FROM tasks WHERE id = $task_id" 2>/dev/null)
+if [ -n "$epic_name" ]; then
+    echo "$epic_name" > "$worktree_path/.task/epic"
+fi
+
+# Get absolute worktree path for DB
+worktree_abs=$(cd "$worktree_path" && pwd)
+
+# Insert into work_sessions (test line 75-76 expects current_task_id=999)
+sqlite3 "$db_path" "INSERT OR REPLACE INTO work_sessions (worktree_path, current_task_id) VALUES ('$worktree_abs', $task_id)"
+
+# Update task status (test line 79-80 expects status='in_progress')
+sqlite3 "$db_path" "UPDATE tasks SET status = 'in_progress', started_at = datetime('now') WHERE id = $task_id AND started_at IS NULL"
+
+echo "Created worktree: $worktree_path"

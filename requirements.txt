@@ -1,0 +1,18 @@
+# Core dependencies - also declared in pyproject.toml
+# This file kept for backwards compatibility with existing workflows
+PyYAML>=6.0
+GitPython>=3.1.0
+tenacity>=8.0.0
+pydantic>=2.0.0
+openai>=1.0.0
+instructor>=1.0.0
+python-frontmatter>=1.0.0
+anthropic>=0.7.0
+jsonschema>=4.0.0
+python-statemachine>=2.0
+
+# Optional: TUI dashboard
+textual>=0.47.0
+
+# For test dependencies, use: pip install .[test]
+# For all optional deps, use: pip install .[all]

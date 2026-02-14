@@ -1,0 +1,56 @@
+#!/bin/bash
+# Post-commit hook: Record commits to FormalTask database
+#
+# Extracts task ID from branch name (task-123) and records the commit.
+# This enables the dashboard commit icon to light up.
+
+set -e
+
+# Get the branch name
+BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)
+
+# Extract task ID from branch name (e.g., task-123 -> 123)
+if [[ "$BRANCH" =~ ^task-([0-9]+)$ ]]; then
+    TASK_ID="${BASH_REMATCH[1]}"
+else
+    # Not a task branch, skip silently
+    exit 0
+fi
+
+# Get commit info
+COMMIT_HASH=$(git rev-parse HEAD)
+COMMIT_MESSAGE=$(git log -1 --format=%s)
+
+# Find database path using worktree-aware resolution
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+DB_PATH="${FORMALTASK_DB_PATH:-}"
+if [[ -z "$DB_PATH" ]]; then
+    # Use db_path.sh for worktree-aware resolution
+    if [[ -f "${REPO_ROOT}/hooks/lib/db_path.sh" ]]; then
+        source "${REPO_ROOT}/hooks/lib/db_path.sh"
+        DB_PATH=$(get_formaltask_db 2>/dev/null) || DB_PATH=""
+    fi
+
+    # Fallback to standard locations if db_path.sh failed
+    if [[ -z "$DB_PATH" ]]; then
+        if [[ -f ".claude/formaltask.db" ]]; then
+            DB_PATH=".claude/formaltask.db"
+        elif [[ -f "$HOME/claude-code/.claude/formaltask.db" ]]; then
+            DB_PATH="$HOME/claude-code/.claude/formaltask.db"
+        else
+            # No database found, skip
+            exit 0
+        fi
+    fi
+fi
+
+# Record commit to database (INSERT OR IGNORE for idempotency)
+sqlite3 "$DB_PATH" "INSERT OR IGNORE INTO commits (task_id, commit_hash, commit_message) VALUES ($TASK_ID, '$COMMIT_HASH', '${COMMIT_MESSAGE//\'/\'\'}')" 2>/dev/null || true
+
+# Also run the existing incomplete task check
+CHECK_SCRIPT="${REPO_ROOT}/hooks/post-commit/check_task_completion.py"
+if [[ -f "$CHECK_SCRIPT" ]]; then
+    FORMALTASK_DB_PATH="$DB_PATH" python3 "$CHECK_SCRIPT" 2>/dev/null || true
+fi

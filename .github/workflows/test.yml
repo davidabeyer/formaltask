@@ -1,0 +1,156 @@
+name: Tests
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Weekly full rebuild every Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      full_test:
+        description: 'Run full test suite (ignore testmon cache)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # Full history for testmon
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # basedpyright, ruff, semgrep needed for test_escape_hatches.py tests
+          extra-packages: 'pytest pytest-cov pytest-testmon pytest-bdd hypothesis pytest-xdist pytest-mock pytest-asyncio basedpyright==1.36.2 ruff semgrep'
+
+      # DISABLED: testmon caching disabled - testmon hangs in CI
+      # - name: Cache testmon data
+      #   if: github.event_name != 'schedule' && github.event.inputs.full_test != 'true'
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: .testmondata
+      #     key: testmon-${{ runner.os }}-${{ github.event.pull_request.base.sha || github.sha }}
+      #     restore-keys: |
+      #       testmon-${{ runner.os }}-${{ github.event.pull_request.base.sha || github.sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Clear stale cache
+        run: |
+          # Clear __pycache__ to prevent stale module imports
+          find tests -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null || true
+          find formaltask -name "*.pyc" -delete 2>/dev/null || true
+
+      # DISABLED: testmon hangs in CI even with branch-specific cache keys
+      # - name: Run tests with testmon (incremental)
+      #   if: github.event_name == 'pull_request'
+      #   timeout-minutes: 15
+      #   run: |
+      #     echo "Running incremental tests with testmon..."
+      #     pytest tests/ -v --testmon --no-cov
+
+      - name: Run full test suite
+        if: true  # Always run full suite - testmon disabled due to CI hangs
+        run: |
+          echo "Running full test suite..."
+          pytest tests/ -v --cov=formaltask --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          file: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+
+      # DISABLED: testmon upload disabled - testmon disabled due to CI hangs
+      # - name: Upload testmon data
+      #   if: github.event_name != 'schedule' && always()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: testmon-data
+      #     path: .testmondata
+      #     retention-days: 7
+
+  bdd-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'pytest pytest-bdd'
+
+      - name: Run BDD tests
+        run: |
+          pytest tests/bdd/ -v --tb=short
+
+  property-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'pytest hypothesis'
+
+      - name: Cache Hypothesis examples
+        uses: actions/cache@v4
+        with:
+          path: .hypothesis
+          key: hypothesis-${{ runner.os }}-${{ hashFiles('tests/property/**/*.py') }}
+          restore-keys: |
+            hypothesis-${{ runner.os }}-
+
+      - name: Run property tests
+        run: |
+          if [ -d "tests/property" ]; then
+            pytest tests/property/ -v --hypothesis-show-statistics
+          else
+            echo "No property tests found, skipping"
+          fi
+
+  api-stability:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'griffe'
+
+      - name: Check API stability
+        run: |
+          if [ -f "hooks/api-stability-check.sh" ]; then
+            bash hooks/api-stability-check.sh
+          else
+            echo "API stability check not configured, skipping"
+          fi

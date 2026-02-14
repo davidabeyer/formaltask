@@ -1,0 +1,3 @@
+{"type": "human", "message": {"content": "Hello"}}
+{"type": "assistant", "message": "This is a string, not a dict"}
+{"type": "assistant", "message": {"content": "Valid response after invalid"}}

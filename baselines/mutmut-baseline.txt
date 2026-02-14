@@ -1,0 +1,140 @@
+# Mutation Testing Baseline
+# Generated: 2025-12-18T17:34:31Z
+# Tool: mutmut 3.4.0
+# Target: hooks/lib/
+
+## Summary
+Total Mutants: 153
+Killed: 114
+Survived: 26
+No Tests: 13
+Timeouts: 0
+
+## Mutation Scores
+- Overall Score (killed/total): 74.5% (114/153)
+- Covered Score (killed/(killed+survived)): 81.4% (114/140)
+
+## Surviving Mutants (Require Test Improvements)
+
+### hooks/lib/session_utils.py - update_file_with_lock
+- x_update_file_with_lock__mutmut_1
+- x_update_file_with_lock__mutmut_4
+- x_update_file_with_lock__mutmut_6
+- x_update_file_with_lock__mutmut_8
+- x_update_file_with_lock__mutmut_12
+- x_update_file_with_lock__mutmut_25
+- x_update_file_with_lock__mutmut_26
+- x_update_file_with_lock__mutmut_31
+- x_update_file_with_lock__mutmut_40
+- x_update_file_with_lock__mutmut_48
+
+### hooks/lib/session_utils.py - truncate_transcript_if_needed
+- x_truncate_transcript_if_needed__mutmut_2
+- x_truncate_transcript_if_needed__mutmut_4
+- x_truncate_transcript_if_needed__mutmut_5
+- x_truncate_transcript_if_needed__mutmut_6
+- x_truncate_transcript_if_needed__mutmut_8
+- x_truncate_transcript_if_needed__mutmut_9
+- x_truncate_transcript_if_needed__mutmut_16
+- x_truncate_transcript_if_needed__mutmut_20
+- x_truncate_transcript_if_needed__mutmut_23
+- x_truncate_transcript_if_needed__mutmut_24
+
+### hooks/lib/session_utils.py - parse_sonnet_json_safely
+- x_parse_sonnet_json_safely__mutmut_10
+
+### hooks/lib/session_utils.py - read_jsonl_safely
+- x_read_jsonl_safely__mutmut_7
+- x_read_jsonl_safely__mutmut_15
+- x_read_jsonl_safely__mutmut_16
+- x_read_jsonl_safely__mutmut_17
+
+### hooks/lib/session_utils.py - create_latest_symlink_atomic
+- x_create_latest_symlink_atomic__mutmut_8
+
+## Uncovered Code (No Tests)
+
+### hooks/lib/session_utils.py - read_jsonl_with_sliding_window
+- x_read_jsonl_with_sliding_window__mutmut_1
+- x_read_jsonl_with_sliding_window__mutmut_2
+- x_read_jsonl_with_sliding_window__mutmut_3
+
+### hooks/lib/epic_repository.py
+- xEpicRepositorycreate_epic__mutmut_1
+- xEpicRepositorycreate_task__mutmut_1
+- xEpicRepositoryarchive_epic__mutmut_1
+
+### hooks/lib/db_connection.py
+- xDatabaseConnection__init____mutmut_1
+
+### hooks/lib/accumulated_context.py
+- xSizeCheckResult__init____mutmut_1
+- xSizeCheckResult__init____mutmut_2
+- x_is_duplicate__mutmut_1
+- x_find_matching_pattern__mutmut_1
+- x_find_matching_pattern_for_error__mutmut_1
+- x_prune_accumulated_context__mutmut_1
+
+## Improvement Targets
+- Baseline (Dec 18, 2025): 74.5% overall, 81.4% covered
+- Q1 2026 Target: 84.5% (baseline + 10%)
+- Final Goal: >80% overall mutation score
+
+## Test Improvements (Task #1363 - Dec 20, 2025)
+
+Added 20 mutation-catching tests in `test_session_utils.py`:
+
+### truncate_transcript_if_needed (4 tests)
+- `test_exact_token_threshold_boundary` - Catches MAX_TOKENS mutations
+- `test_exact_25_75_split_ratios` - Catches 0.25/0.75 ratio mutations
+- `test_truncation_marker_present` - Catches marker string mutations
+- `test_token_estimation_formula` - Catches `// 4` division mutations
+
+### read_jsonl_safely (5 tests)
+- `test_empty_file_returns_empty_string` - Catches empty return mutations
+- `test_trailing_newline_present` - Catches `+ '\n'` mutations
+- `test_single_valid_line` - Catches join logic mutations
+- `test_all_corrupted_returns_empty` - Catches filter logic mutations
+- `test_whitespace_only_lines_skipped` - Catches strip()/empty check mutations
+
+### parse_sonnet_json_safely (3 tests)
+- `test_invalid_json_returns_empty_dict` - Catches fallback return mutations
+- `test_invalid_json_in_code_block_raises` - Documents current behavior
+- `test_code_block_without_json_label` - Catches regex pattern mutations
+
+### create_latest_symlink_atomic (3 tests)
+- `test_replaces_existing_symlink` - Catches replace() mutations
+- `test_temp_file_cleaned_up` - Catches temp file handling mutations
+- `test_handles_stale_temp_file` - Catches unlink(missing_ok=True) mutations
+
+### update_file_with_lock (5 tests)
+- `test_file_content_is_truncated_after_write` - Catches truncate() mutations
+- `test_update_fn_receives_current_content` - Catches read() mutations
+- `test_seek_to_beginning_before_write` - Catches seek(0) mutations
+- `test_max_retries_on_file_deletion_race` - Catches max_retries mutations
+- `test_poll_interval_constants_used` - Catches backoff constant mutations
+
+## Regeneration Commands
+
+```bash
+# 1. Generate fresh coverage data
+pytest hooks/tests/lib/ --cov=hooks/lib --cov-report=xml
+
+# 2. Clear previous mutation cache
+rm -rf .mutmut-cache mutants
+
+# 3. Run mutation testing
+mutmut run --max-children 4
+
+# 4. View results summary
+mutmut results
+
+# 5. Investigate specific surviving mutant
+mutmut show <mutant_id>
+```
+
+## Notes
+- hypothesis tests excluded (incompatible with mutmut multi-process)
+- Focus on session_utils.py for highest impact improvements
+- update_file_with_lock and truncate_transcript_if_needed need better assertions
+- Machine-readable baseline available: baselines/mutmut-baseline.json

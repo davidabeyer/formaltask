@@ -1,0 +1,7 @@
+#!/bin/bash
+# Commit message validation hook
+# This hook is called by Git with the commit message file path as $1
+
+# Validate commit message format
+python3 .claude/scripts/pre-commit-unified.py "$1"
+exit $?

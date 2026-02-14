@@ -1,0 +1,51 @@
+{
+  "generated": "2025-12-18T17:34:31Z",
+  "tool": "mutmut",
+  "version": "3.4.0",
+  "target": "hooks/lib/",
+  "summary": {
+    "total_mutants": 153,
+    "killed": 114,
+    "survived": 26,
+    "no_tests": 13,
+    "timeouts": 0
+  },
+  "scores": {
+    "overall": 74.5,
+    "covered": 81.4
+  },
+  "targets": {
+    "q1_2026": 84.5,
+    "final_goal": 80.0,
+    "quarterly_improvement": 10.0
+  },
+  "surviving_mutants": {
+    "hooks/lib/session_utils.py": {
+      "update_file_with_lock": [1, 4, 6, 8, 12, 25, 26, 31, 40, 48],
+      "truncate_transcript_if_needed": [2, 4, 5, 6, 8, 9, 16, 20, 23, 24],
+      "parse_sonnet_json_safely": [10],
+      "read_jsonl_safely": [7, 15, 16, 17],
+      "create_latest_symlink_atomic": [8]
+    }
+  },
+  "uncovered_mutants": {
+    "hooks/lib/session_utils.py": {
+      "read_jsonl_with_sliding_window": [1, 2, 3]
+    },
+    "hooks/lib/epic_repository.py": {
+      "EpicRepository.create_epic": [1],
+      "EpicRepository.create_task": [1],
+      "EpicRepository.archive_epic": [1]
+    },
+    "hooks/lib/db_connection.py": {
+      "DatabaseConnection.__init__": [1]
+    },
+    "hooks/lib/accumulated_context.py": {
+      "SizeCheckResult.__init__": [1, 2],
+      "_is_duplicate": [1],
+      "_find_matching_pattern": [1],
+      "_find_matching_pattern_for_error": [1],
+      "_prune_accumulated_context": [1]
+    }
+  }
+}

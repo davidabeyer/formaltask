@@ -1,0 +1,61 @@
+# Pre-commit hooks configuration
+# See https://pre-commit.com for more information
+# Cache buster: 2025-12-23 (basedpyright 1.36.2 baseline sync)
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.2
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        exclude: ^(Archive/|bin/|agents/|dayflow_linear_sync/|claude-mcp-server-gateway/|creative-llm-council/|formaltask-refactor-work/|scripts/|tools/|ccpm/|Memory/|plans/|toy_ci_validator/|skills/|tests/|hooks/|hooks\.backup.*/|\.hypothesis/|.*\.hypothesis/|\.claude/|[^/]+\.py$)
+        types_or: [python, pyi]
+      # Run the formatter
+      - id: ruff-format
+        exclude: ^(Archive/|bin/|agents/|dayflow_linear_sync/|claude-mcp-server-gateway/|creative-llm-council/|formaltask-refactor-work/|scripts/|tools/|ccpm/|Memory/|plans/|toy_ci_validator/|skills/|tests/|hooks/|hooks\.backup.*/|\.hypothesis/|.*\.hypothesis/|\.claude/|[^/]+\.py$)
+        types_or: [python, pyi]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: ^(Archive/|bin/|agents/|dayflow_linear_sync/|claude-mcp-server-gateway/|creative-llm-council/|formaltask-refactor-work/|scripts/|tools/|\.github/|\.codacy/|\.brv/|ccpm/|Memory/|plans/|skills/|commands/|\.claude/|hooks/|hooks\.backup.*/|tests/|toy_ci_validator/|\.hypothesis/|.*\.hypothesis/|.*\.md$|.*\.bats$|.*\.sh$|.*backup.*|.*\.json$|[^/]+\.py$)
+      - id: end-of-file-fixer
+        exclude: ^(Archive/|bin/|agents/|dayflow_linear_sync/|claude-mcp-server-gateway/|creative-llm-council/|formaltask-refactor-work/|scripts/|tools/|\.github/|\.codacy/|\.brv/|ccpm/|Memory/|plans/|skills/|commands/|\.claude/|hooks/|hooks\.backup.*/|tests/|toy_ci_validator/|\.hypothesis/|.*\.hypothesis/|.*\.md$|.*\.bats$|.*\.sh$|.*backup.*|.*\.json$|[^/]+\.py$)
+      - id: check-yaml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: debug-statements
+        exclude: ^(Archive/|bin/|agents/|dayflow_linear_sync/|claude-mcp-server-gateway/|creative-llm-council/|formaltask-refactor-work/|scripts/|tools/|ccpm/|Memory/|plans/|toy_ci_validator/|skills/|tests/|hooks/|hooks\.backup.*/|\.hypothesis/|.*\.hypothesis/|\.claude/|[^/]+\.py$)
+
+  # TEMPORARILY DISABLED - pre-existing mypy errors need separate fix
+  # - repo: https://github.com/pre-commit/mirrors-mypy
+  #   rev: v1.13.0
+  #   hooks:
+  #     - id: mypy
+  #       additional_dependencies: [types-requests]
+  #       args: [--ignore-missing-imports, --no-error-summary]
+  #       exclude: ^(tests/|hooks/tests/)
+
+  # basedpyright type checker (pyright fork with baseline support)
+  - repo: local
+    hooks:
+      - id: basedpyright
+        name: basedpyright
+        # --baselinemode=discard: reads baseline but never updates it
+        # Exits 0 unless NEW errors appear (ignores fixed errors that shrink baseline)
+        # CI defaults to 'lock' which fails on any baseline change including fixes
+        entry: basedpyright --baselinemode=discard
+        language: system
+        types: [python]
+        pass_filenames: false
+
+      # Semgrep SAST (static application security testing)
+      # Scoped to hooks/ directory per PRP - other directories have pre-existing findings
+      - id: semgrep
+        name: semgrep
+        entry: bash -c 'SEMGREP_TIMEOUT=300 semgrep scan --config auto --error --max-memory 4096 hooks/'
+        language: system
+        types: [python]
+        pass_filenames: false

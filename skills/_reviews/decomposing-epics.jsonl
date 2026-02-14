@@ -1,0 +1,1 @@
+{"date": "2026-01-25", "skill": "decomposing-epics", "suggestions": ["Add explicit note that spec files MUST end in -spec.md or -initial.md", "Mark spec reference in References section as REQUIRED", "Show required naming convention before ft epic-decompose example"], "rating": "Confirmed", "additions": null, "skipped": false}

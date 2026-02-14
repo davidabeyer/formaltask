@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# task-worker-spawn - Spawn Claude CLI worker in tmux for a task
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+    echo "Usage: task-worker-spawn <task_id> [prompt]" >&2
+    exit 1
+fi
+
+task_id="$1"
+session_name="task-${task_id}"
+
+# Check if session already exists (idempotent)
+if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo "Session already exists: $session_name"
+    echo "Attach with: tmux attach -t $session_name"
+    exit 0
+fi
+
+# Call task-start to create worktree and capture output
+worktree_output=$("$HOME/.claude/bin/task-start" "$task_id" 2>&1) || true
+
+# Extract worktree path from output ("Created worktree: /path/to/worktree")
+worktree_path=$(echo "$worktree_output" | grep "Created worktree:" | sed 's/Created worktree: //')
+
+# Fallback: check git worktree list if task-start output didn't have path
+if [ -z "$worktree_path" ]; then
+    worktree_path=$(git worktree list --porcelain | grep -A0 "^worktree.*task-${task_id}-" | head -1 | sed 's/worktree //')
+fi
+
+# Fail fast: Exit with error if worktree detection fails
+if [ -z "$worktree_path" ] || [ ! -d "$worktree_path" ]; then
+    echo "Error: Could not determine worktree path for task #${task_id}" >&2
+    echo "Expected worktree: ${main_repo:-$(git rev-parse --show-toplevel 2>/dev/null)}/../task-${task_id}-*" >&2
+    echo "Available worktrees:" >&2
+    git worktree list >&2
+    exit 1
+fi
+
+# Validate task_id is numeric (security: prevent injection)
+if ! [[ "$task_id" =~ ^[0-9]+$ ]]; then
+    echo "Error: task_id must be numeric, got: $task_id" >&2
+    exit 1
+fi
+
+# Build task context prompt
+prompt="${2:-Work on task #${task_id}. Read the task file and PRP references, then implement following TDD workflow.}"
+
+# Check tmux version for -e flag support (requires 3.2+)
+# The -e flag explicitly passes environment variables to the new session
+tmux_version=$(tmux -V 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)
+tmux_major=$(echo "$tmux_version" | cut -d. -f1)
+tmux_minor=$(echo "$tmux_version" | cut -d. -f2)
+
+# Create tmux session and launch Claude with initial prompt
+# --permission-mode dontAsk: Uses pre-approved tools from ~/.claude/settings.json
+# This respects allow/deny lists (unlike --dangerously-skip-permissions)
+if [[ -n "$tmux_version" ]] && [[ "$tmux_major" -ge 3 ]] && [[ "$tmux_minor" -ge 2 || "$tmux_major" -gt 3 ]]; then
+    # tmux 3.2+: Use -e flag for reliable TASK_ID passthrough
+    tmux new-session -d -e TASK_ID="$task_id" -s "$session_name" -c "$worktree_path" "claude --permission-mode dontAsk \"$prompt\""
+else
+    # tmux < 3.2: Fall back to worktree path detection only
+    echo "Warning: tmux ${tmux_version:-unknown} lacks -e flag (requires 3.2+)" >&2
+    echo "TASK_ID detection will use worktree path fallback" >&2
+    tmux new-session -d -s "$session_name" -c "$worktree_path" "claude --permission-mode dontAsk \"$prompt\""
+fi
+
+# Store session name for recovery
+mkdir -p "$worktree_path/.task"
+echo "$session_name" > "$worktree_path/.task/tmux-session"
+
+echo "Worktree: $worktree_path"
+echo "Claude launched with --permission-mode dontAsk"
+echo "NOTE: First run in worktree may require workspace trust acceptance"
+echo "Attach with: tmux attach -t $session_name"
+echo "Detach with: Ctrl+B, D"

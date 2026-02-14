@@ -1,0 +1,60 @@
+# Ruff C901 Cyclomatic Complexity Baseline
+# Generated: 2025-12-18
+# Threshold: max-complexity = 10 (functions > 10 are flagged)
+# Total violations: 26
+#
+# IMPORTANT: CI/Pre-commit Context
+# ================================
+# This baseline is DOCUMENTATION ONLY - it is not a machine-readable suppression.
+# - CI passes because `.pre-commit-config.yaml` excludes `hooks/` from ruff checks
+# - Running `ruff check hooks/` locally WILL report these 26 violations as errors
+# - To suppress individual functions, add `# noqa: C901` to the function definition
+# - To suppress entire files, add to `[tool.ruff.lint.per-file-ignores]` in pyproject.toml
+
+## Critical (complexity > 15) - Immediate refactoring needed
+# These functions have very high cyclomatic complexity and should be prioritized
+
+hooks/cli/pm.py:19:5                          main                                         74 > 10
+hooks/cli/commands/epic_decompose.py:133:5    epic_decompose                               30 > 10
+hooks/pre-compact/pre_compact_worker.py:1103:5 save_handoff                                24 > 10
+hooks/lib/doc_guard_hook.py:130:5             check_documentation_coverage                 23 > 10
+hooks/session-end/session_end_worker.py:1437:5 main                                        23 > 10
+hooks/pre-compact/pre_compact_worker.py:1391:5 main                                        21 > 10
+hooks/lib/pre_tool_use_validator.py:20:5      main                                         20 > 10
+hooks/cli/commands/commit_scan.py:9:5         commit_scan                                  19 > 10
+hooks/lib/doc_guard_hook.py:288:5             doc_guard_check                              19 > 10
+hooks/lib/epic_repository.py:57:9             _ensure_initialized                          17 > 10
+hooks/tests/test_import_consistency.py:58:5   test_detects_try_except_import_pattern       16 > 10
+hooks/tests/test_import_consistency.py:99:5   test_clean_imports_pass                      16 > 10
+
+## High (complexity 13-15) - Refactor when touching this code
+
+hooks/cli/commands/epic_review.py:17:5        epic_review                                  14 > 10
+hooks/lib/stub_detector.py:24:5               is_stub_body                                 14 > 10
+hooks/cli/commands/issue_complete.py:124:5    issue_complete                               13 > 10
+hooks/lib/mock_parity_analyzer.py:71:5        extract_patch_targets                        13 > 10
+
+## Medium (complexity 11-12) - Consider refactoring
+
+hooks/lib/epic_repository.py:238:9            create_task                                  12 > 10
+hooks/lib/task_lifecycle.py:72:5              transition_task_status                       12 > 10
+hooks/tests/integration/test_session_end_incremental.py:53:9 test_main_workflow_uses_incremental_processing_and_updates_frontmatter 12 > 10
+hooks/cli/commands/issue_complete.py:298:5    _show_unblocked_tasks_after_completion       11 > 10
+hooks/cli/doc_guard_cli.py:19:5               cmd_pending                                  11 > 10
+hooks/lib/path_utils.py:28:5                  safe_rmtree                                  11 > 10
+hooks/lib/stub_validator.py:21:5              validate_tool_use                            11 > 10
+hooks/pre-compact/pre_compact_worker.py:657:5 lean_handoff_to_context                      11 > 10
+hooks/session-end/session_end_worker.py:1051:5 populate_sections_from_narrative            11 > 10
+hooks/session-start/register_active_session.py:14:5 get_first_prompt                       11 > 10
+
+## Summary by severity
+# Critical (>15): 12 functions
+# High (13-15):   4 functions
+# Medium (11-12): 10 functions
+
+## Refactoring strategies
+# 1. Extract helper functions for distinct branches
+# 2. Use early returns to reduce nesting
+# 3. Replace complex conditionals with lookup tables/dicts
+# 4. Use guard clauses at function start
+# 5. Apply # noqa: C901 only for genuinely unavoidable complexity

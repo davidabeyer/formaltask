@@ -1,0 +1,5 @@
+{"type": "human", "message": {"content": "Hello"}}
+{"type": "assistant", "message": {"content": "Hi there!"}}
+{"type": "summary", "message": {"content": "Compaction #1: User greeted assistant"}}
+{"type": "human", "message": {"content": "Thanks for help"}}
+{"type": "assistant", "message": {"content": "You're welcome! Is there anything else?"}}

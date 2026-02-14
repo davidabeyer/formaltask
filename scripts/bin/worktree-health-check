@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# worktree-health-check - Identify and fix detached HEAD worktrees
+# Task #1324
+
+set -euo pipefail
+
+# Parse git worktree list --porcelain output to handle paths with spaces
+parse_detached_worktrees() {
+    local current_path=""
+    local in_detached=false
+    
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" =~ ^worktree\ (.+)$ ]]; then
+            current_path="${BASH_REMATCH[1]}"
+            in_detached=false
+        elif [[ "$line" == "detached" ]]; then
+            in_detached=true
+        elif [[ -z "$line" ]] && [[ "$in_detached" == true ]] && [[ -n "$current_path" ]]; then
+            echo "$current_path"
+            current_path=""
+            in_detached=false
+        fi
+    done
+    
+    # Handle last entry if no trailing blank line
+    if [[ "$in_detached" == true ]] && [[ -n "$current_path" ]]; then
+        echo "$current_path"
+    fi
+}
+
+# Sanitize branch name to be valid git ref
+sanitize_branch_name() {
+    local name="$1"
+    # Remove invalid characters: ~, ^, :, \, .., @{, leading/trailing dots and spaces
+    name="${name#.}"           # Remove leading dot
+    name="${name%.}"           # Remove trailing dot
+    name="${name// /-}"        # Replace spaces with dashes
+    name="${name//~/-}"        # Replace ~
+    name="${name//^/-}"        # Replace ^
+    name="${name//:/-}"        # Replace :
+    name="${name//\\/-}"       # Replace \
+    name="${name//../-}"       # Replace ..
+    name="${name//@\{/-}"      # Replace @{
+    echo "$name"
+}
+
+main() {
+    local success_count=0
+    local skip_count=0
+    local fail_count=0
+    
+    # Find detached HEAD worktrees using porcelain format (handles spaces in paths)
+    local detached_paths
+    detached_paths=$(git worktree list --porcelain | parse_detached_worktrees)
+    
+    local detached_count
+    if [[ -z "$detached_paths" ]]; then
+        detached_count=0
+    else
+        detached_count=$(echo "$detached_paths" | wc -l | tr -d ' ')
+    fi
+    
+    if [[ "$detached_count" -gt 0 ]]; then
+        echo "Found $detached_count detached HEAD worktree(s)"
+        
+        # Process each detached worktree using process substitution (avoids subshell)
+        while IFS= read -r worktree_path; do
+            [[ -z "$worktree_path" ]] && continue
+            
+            # Derive and sanitize branch name from directory name
+            local raw_name
+            raw_name=$(basename "$worktree_path")
+            local branch_name
+            branch_name=$(sanitize_branch_name "$raw_name")
+            
+            # Check if branch already exists
+            if git show-ref --verify --quiet "refs/heads/$branch_name" 2>/dev/null; then
+                echo "  $worktree_path -> Skipped (branch '$branch_name' already exists)"
+                ((skip_count++))
+                continue
+            fi
+            
+            # Create the branch in that worktree
+            if (cd "$worktree_path" && git checkout -b "$branch_name" 2>/dev/null); then
+                echo "  $worktree_path -> Created branch $branch_name"
+                ((success_count++))
+            else
+                echo "  $worktree_path -> Failed to create branch $branch_name"
+                ((fail_count++))
+            fi
+        done <<< "$detached_paths"
+        
+        # Summary
+        if [[ $((success_count + skip_count + fail_count)) -gt 0 ]]; then
+            echo ""
+            echo "Summary: $success_count created, $skip_count skipped, $fail_count failed"
+        fi
+    fi
+    
+    echo "Done."
+}
+
+main "$@"

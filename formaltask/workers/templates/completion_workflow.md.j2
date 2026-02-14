@@ -1,0 +1,130 @@
+{%- if target_branch and target_branch != 'master' %}
+## PR Target Branch
+**IMPORTANT:** This task uses feature branch isolation.
+Target branch: `{{ target_branch }}`
+Command: `gh pr create --base {{ target_branch }}`
+{% endif -%}
+<completion_workflow>
+## Task Completion Workflow
+
+Follow this workflow in order. Do NOT skip steps.
+
+### Required Todos (MANDATORY)
+
+Your TodoWrite MUST include these workflow steps:
+{%- for step in workflow_steps %}
+{{ loop.index }}. **{{ step }}**
+{%- endfor %}
+
+A PreToolUse hook validates your todos include these steps.
+
+---
+
+### Pre-Completion Checklist
+
+Before attempting completion, verify:
+- [ ] All acceptance criteria have concrete evidence (tests pass, output shown)
+- [ ] Linter passes: `ruff check <changed_files>` with no errors
+- [ ] All changes committed: `git status` shows clean working tree
+
+If any check fails, fix it first.
+
+### Commit and Push
+
+```bash
+git add -A && git commit -m "feat(task-{{ task_id }}): <description>" && git push
+```
+{%- if has_reviews %}
+{% include 'review_section.md.j2' %}
+{%- endif %}
+### Share Learnings (Optional)
+
+Before completing, consider sharing insights with sibling tasks.
+
+**Step 1: See sibling specs** (optional)
+```
+/reflect
+```
+Shows incomplete sibling task specs so you know what they're working on.
+
+**Step 2: Share if useful**
+```bash
+ft learning "insight" --for <sibling_task_ids>
+```
+
+**Examples:**
+```bash
+# Gotcha that would help sibling
+ft learning "Monkeypatching imports requires module-level patching" --for 2685
+
+# Pattern useful to multiple siblings
+ft learning "SQLite WAL mode improves concurrent writes" --for 2685,2690
+```
+
+**Share** if it saves time or prevents mistakes. **Skip** if nothing to share.
+
+### Create PR and Wait for CI
+
+```bash
+gh pr create --title "Task #{{ task_id }}: <title>" --body "Closes task #{{ task_id }}"{{ base_flag }}
+```
+
+Wait for all CI checks to pass:
+```bash
+gh pr checks --watch --fail-fast --interval 60
+```
+
+**CI MONITORING CONSTRAINTS:**
+1. **Use ONLY `gh pr checks --watch`** to wait for CI. This shows pass/fail status without log output.
+2. **NEVER use `gh run watch`** — it streams thousands of lines of CI logs into your context, wasting tokens.
+3. **NEVER use `gh api`, `gh run view`, or `gh pr view --json statusCheckRollup`** — redundant API calls exhaust the rate limit (5000/hr shared across all workers).
+
+If CI fails, run `gh run view <run-id> --log-failed 2>&1 | head -50` to see ONLY the failure output, not the full log.
+
+If CI fails, read the failure output, fix the issue, push, and re-run `gh pr checks --watch --fail-fast --interval 60`.
+
+### Merge PR
+
+Check mergeability and merge:
+```bash
+gh pr view --json mergeable --jq '.mergeable'
+```
+
+- If `MERGEABLE`: merge the PR:
+  ```bash
+  gh pr merge --squash --delete-branch
+  ```
+- If `CONFLICTING`: you cannot resolve this — escalate:
+  ```bash
+  python3 -m formaltask.cli.pm work blocked "Merge conflict on PR — needs manual rebase"
+  ```
+- If `UNKNOWN`: CI may still be running. Wait and re-check.
+
+### Complete Task
+
+```bash
+python3 -m formaltask.cli.pm task complete {{ task_id }}
+```
+
+If this fails, read the error and address it. Common issues:
+- Missing commits -> commit and push
+- Error says "Run: ft work blocked" -> do it immediately, do not retry
+{%- if has_reviews %}
+- Review findings still open -> go back to **Validate Findings**
+{%- endif %}
+
+### Loop Until Success
+
+Do NOT stop until you see: `Task #{{ task_id }} completed successfully`
+
+If completion fails, fix the issue and retry. Common retry scenarios:
+- Review findings -> address findings, re-run reviews, retry completion
+- Missing commits -> commit and push, retry completion
+- CI failure -> fix, push, wait for CI again
+- Merge conflict -> run `ft work blocked` to escalate
+
+If genuinely stuck after 3+ attempts:
+```bash
+python3 -m formaltask.cli.pm work blocked "<describe what's blocking you>"
+```
+</completion_workflow>

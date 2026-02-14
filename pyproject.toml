@@ -1,0 +1,274 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "formaltask"
+version = "0.1.0"
+description = "Structured task management for AI-assisted development workflows"
+requires-python = ">=3.11"
+license = "MIT"
+readme = "README.md"
+authors = [
+    {name = "David Beyer"}
+]
+keywords = ["task-management", "cli", "development-workflow", "ai-assisted"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+    "PyYAML>=6.0",
+    "GitPython>=3.1.37",  # CVE-2023-40267 fix
+    "tenacity>=8.0.0",
+    "pydantic>=2.0.0",
+    "python-frontmatter>=1.0.0",
+    "jsonschema>=4.0.0",
+    "python-statemachine>=2.0",
+    "Jinja2>=3.1.3",  # CVE-2024-22195 fix
+    "rich>=13.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/davidabeyer/formaltask"
+Documentation = "https://github.com/davidabeyer/formaltask"
+
+[project.scripts]
+formaltask = "formaltask.cli.__main__:main"
+ft = "formaltask.cli.__main__:main"
+
+[project.optional-dependencies]
+llm = [
+    "openai>=1.0.0",
+    "instructor>=1.0.0",
+]
+tui = [
+    "textual>=0.47.0",
+    "cachetools>=5.3.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-mock>=3.10.0",
+    "hypothesis>=6.0.0",
+    "pytest-textual-snapshot>=1.0.0",
+]
+dev = [
+    "basedpyright>=1.29.0",
+    "semgrep>=1.100.0",
+    "ruff>=0.1.0",
+    "interrogate>=1.5.0",
+]
+agents = [
+    "numpy>=1.24.0",
+    "requests>=2.28.0",
+]
+dayflow = [
+    "httpx>=0.24.0",
+]
+# Requires Python >= 3.10
+mcp = [
+    "mcp>=0.1.0",
+]
+all = [
+    "formaltask[llm]",
+    "formaltask[tui]",
+    "formaltask[test]",
+    "formaltask[dev]",
+    "formaltask[agents]",
+    "formaltask[dayflow]",
+    "formaltask[mcp]",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["formaltask*", "hooks*"]
+
+[tool.setuptools.package-data]
+# Include SQL schema file for importlib.resources access (Task #2652)
+"formaltask.data" = ["*.sql"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = [
+    ".git",
+    ".hypothesis",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".venv",
+    "__pycache__",
+    "*.egg-info",
+    "*.sql",
+    "Archive",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "UP",     # pyupgrade
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return (unnecessary else after return)
+    "PIE",    # flake8-pie (useless pass, no-unnecessary-spread)
+    "PLR",    # pylint refactor (too-many-branches, magic values)
+]
+extend-select = [
+    "C90",    # mccabe cyclomatic complexity
+]
+ignore = [
+    "E402",   # module-import-not-at-top-of-file (intentional in hook scripts)
+    "E501",   # line-too-long (handled by formatter)
+    "B008",   # function-call-in-default-argument (common pattern)
+    "SIM102", # collapsible-if (readability preference)
+    "SIM103", # return-bool-condition-directly (explicit is clearer)
+    "SIM105", # use-contextlib-suppress (explicit try/except is clearer)
+    "SIM108", # use-ternary-operator (readability preference)
+    "PLR2004", # magic-value-comparison (60 seconds is fine inline)
+    "PLR0911", # too-many-return-statements (existing code, refactor later)
+    "PLR0912", # too-many-branches (existing code, refactor later)
+    "PLR0913", # too-many-arguments (existing code, refactor later)
+    "PLR0915", # too-many-statements (existing code, refactor later)
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 40  # Default 10 too strict for existing code - refactor gradually
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]  # assert-false allowed in tests
+"formaltask/cli/*" = ["E402"]    # imports after sys.path manipulation
+
+[tool.ruff.lint.isort]
+known-first-party = ["formaltask"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "--tb=short -x"
+asyncio_mode = "auto"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "timeout: marks tests with timeout limits",
+    "golden: marks golden output tests for selective runs",
+]
+
+[tool.coverage.run]
+source = ["formaltask"]
+omit = [
+    "tests/*",
+    "**/test_*.py",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+]
+fail_under = 70
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+
+[tool.pyright]
+# REQUIREMENT: Node.js 20+ must be installed (basedpyright wraps a Node.js-based type checker)
+# Tool: basedpyright (pyright fork with baseline support)
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+venv = ".venv"
+# Disabled - Ruff F401 handles unused imports (avoid duplicate findings)
+reportUnusedImport = "none"
+reportUnusedVariable = "error"
+# Disabled - third-party packages without stubs cause noise
+reportMissingTypeStubs = false
+# Enabled - venv config resolves local imports; catches actual missing deps
+reportMissingImports = "error"
+# Baseline file for gradual type checking adoption
+baselineFile = "baselines/pyright-baseline.json"
+extraPaths = ["."]
+# Exclude patterns matching ruff config for consistency
+exclude = [
+    ".venv",
+    "backups",
+    "bin",
+    "agents",
+    "claude-mcp-server-gateway",
+    "scripts",
+    "tools",
+    "plans",
+    "skills",
+    ".hypothesis",
+    ".claude",
+    "tests",
+]
+
+[tool.interrogate]
+# Docstring coverage for public API
+ignore-init-method = true
+ignore-init-module = true
+ignore-magic = true
+ignore-semiprivate = true
+ignore-private = true
+ignore-module = true
+ignore-nested-functions = true
+ignore-nested-classes = true
+fail-under = 60
+exclude = ["tests", "hooks", "docs", "scripts"]
+verbose = 1
+
+[tool.mutmut]
+# Mutation testing configuration
+# Run with: mutmut run
+# View results: mutmut results
+
+paths_to_mutate = [
+    "formaltask/workers/monitor.py",
+    "formaltask/workers/crash_detector.py",
+    "formaltask/workers/inbox.py",
+]
+tests_dir = ["tests/"]
+
+# Exclude test files from mutation
+do_not_mutate = ["tests/**/*", "**/test_*.py"]
+
+# Disable coverage-based mutation to avoid test dependency issues
+mutate_only_covered_lines = false
+
+# Copy formaltask/ and hooks/ (avoid symlink issues)
+# Note: Schema now packaged in formaltask/data/schema.sql (Task #2652)
+also_copy = ["formaltask/", "hooks/", "conftest.py"]
+
+# Test selection for mutated modules
+pytest_add_cli_args_test_selection = [
+    "tests/unit/test_worker_monitor.py",
+    "tests/unit/test_crash_detector.py",
+    "tests/unit/test_inbox.py",
+    "-x"
+]

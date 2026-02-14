@@ -1,0 +1,1 @@
+/Users/davidbeyer/claude-code/scripts/run-bats-with-tdd-guard.sh

@@ -1,0 +1,35 @@
+<task_assignment>
+# Task #42: Add authentication
+
+**SCOPE: This task only. Other PRP tasks are context, not assignments.**
+
+## Acceptance Criteria
+- Login endpoint returns JWT token
+- Password hashing uses bcrypt
+- Rate limiting on login attempts
+
+## Acceptance Verification Commands
+
+These commands will be run to verify your work passes:
+
+- **Login endpoint returns JWT token**
+  ```
+  pytest tests/test_auth.py -v
+  ```
+- **Password hashing uses bcrypt**
+  ```
+  python3 -c "from auth import hash_password; assert hash_password("test")"
+  ```
+- **Rate limiting on login attempts**
+  ```
+  pytest tests/test_rate_limit.py -v
+  ```
+
+## PRP
+title: Add authentication
+summary: Implement auth flow
+
+## Recommended Skills
+Invoke these skills when relevant to your work:
+- `/test-driven-development` - invoke when needed
+</task_assignment>

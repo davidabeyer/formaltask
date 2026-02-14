@@ -1,0 +1,102 @@
+{%- if prior_findings %}
+### Prior Review Findings (Round {{ review_round }})
+
+The following findings were identified in previous review rounds. Do NOT repeat these — focus on new issues or verify fixes.
+
+{%- set open_findings = prior_findings | selectattr("status", "equalto", "open") | list -%}
+{%- set fixed_findings = prior_findings | selectattr("status", "equalto", "fixed") | list -%}
+{%- set wontfix_findings = prior_findings | selectattr("status", "equalto", "wontfix") | list -%}
+{%- if open_findings %}
+
+**Open (needs fix):**
+{%- for f in open_findings %}
+- {{ f.severity }}: {{ f.file }}:{{ f.line }} — {{ f.message }}
+{%- endfor %}
+{%- endif %}
+{%- if fixed_findings %}
+
+**Fixed:**
+{%- for f in fixed_findings %}
+- {{ f.severity }}: {{ f.file }}:{{ f.line }} — {{ f.message }}
+{%- endfor %}
+{%- endif %}
+{%- if wontfix_findings %}
+
+**Wontfix:**
+{%- for f in wontfix_findings %}
+- {{ f.severity }}: {{ f.file }}:{{ f.line }} — {{ f.message }}
+{%- endfor %}
+{%- endif %}
+
+{% endif -%}
+### Run Required Reviews
+
+Required review types: {{ required_reviews | join(", ") }}
+
+{% for review in review_types %}
+Spawn {{ review.name }}:
+```python
+{{ review.invocation }}
+```
+{{ review.instruction }}
+
+{% endfor %}
+Wait for the review to complete and examine the findings.
+
+### Validate Findings (YOU Must Do This)
+
+For EACH finding (P0-P3), read the actual code and determine:
+
+| Verdict | Meaning | Action |
+|---------|---------|--------|
+| **VALID** | Finding points to real issue | Fix it |
+| **FALSE POSITIVE** | Reviewer misunderstood code/context | Mark disposition |
+
+**Be ruthless**: Don't blindly accept findings. Verify each one by reading the code yourself.
+
+Use TodoWrite to track validation:
+```python
+TodoWrite(todos=[
+    {"content": "Validate P0: <summary>", "status": "in_progress", "activeForm": "Validating P0 finding"},
+    {"content": "Validate P1: <summary>", "status": "pending", "activeForm": "Validating P1 finding"},
+])
+```
+
+### Address Valid Findings
+
+ALL findings are yours to fix. For each finding:
+
+1. **Fix it** - Your first responsibility
+2. **Mark wontfix** - If legitimately cannot fix (--reason REQUIRED):
+   ```bash
+   ft review disposition FILE LINE --reason "Pre-existing in legacy code"
+   ft review disposition FILE LINE --reason "False positive: <why reviewer was wrong>"
+   ```
+3. **Escalate** - ONLY if stuck and need human judgment:
+   ```bash
+   ft review disposition FILE LINE --reason "Security tradeoff needs architect" --needshuman
+   ```
+   This blocks until human resolves via `/inbox`.
+
+### Commit Fixes
+
+If you made any fixes:
+```bash
+git add -A && git commit -m "fix(task-{{ task_id }}): address review findings" && git push
+```
+
+### Verify Fixes (Sonnet Agent)
+
+After fixing, use the **verification-reviewer** (sonnet) to confirm fixes and detect regressions:
+
+```python
+Task(
+    subagent_type="verification-reviewer",
+    description="Verify fixes for task #{{ task_id }}",
+    prompt="Verify fixes for task #{{ task_id }}. Original findings: <paste P0-P3 findings from Run Required Reviews>. Confirm each is addressed and check for regressions introduced by fixes."
+)
+```
+
+This is lighter-weight than a full code-reviewer (opus) since it focuses only on verifying known issues are fixed.
+
+If regressions or unaddressed findings appear, go back to **Validate Findings**.

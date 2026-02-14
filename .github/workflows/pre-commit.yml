@@ -1,0 +1,50 @@
+name: Pre-commit Checks
+
+on:
+  pull_request:
+  push:
+    branches: [master, main]
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          # Pin specific versions to prevent supply chain attacks
+          # basedpyright pinned to exact version for baseline consistency
+          extra-packages: 'pipx pre-commit==4.4.0 detect-secrets==1.5.0 pip-audit==2.10.0 basedpyright==1.36.2'  # pragma: allowlist secret
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Semgrep via pipx
+        run: |
+          # Semgrep requires native binary, install via pipx
+          pipx install semgrep
+          pipx ensurepath
+
+      - name: Cache pre-commit hooks
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: |
+            pre-commit-
+
+      - name: Run pre-commit
+        env:
+          PRE_COMMIT_MODE: batch
+        run: |
+          pre-commit run --all-files

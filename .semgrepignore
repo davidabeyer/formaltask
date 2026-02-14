@@ -1,0 +1,31 @@
+# Semgrep ignore patterns for Claude Code hooks
+#
+# This file excludes files/directories from Semgrep scanning to reduce
+# false positives and noise.
+
+# Backup files (not production code)
+*.backup*
+*.backup-*
+
+# Archive directory (deprecated/old code)
+Archive/
+
+# Test files (may contain intentionally insecure code for testing)
+hooks/tests/
+
+# Test hypothesis directory (generated test data)
+.hypothesis/
+
+# Virtual environments
+.venv/
+venv/
+
+# Build artifacts
+__pycache__/
+*.egg-info/
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo

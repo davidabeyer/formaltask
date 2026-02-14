@@ -1,0 +1,36 @@
+# Test fixture for doc-guard backwards compatibility tests.
+# Provides file→doc mappings for testing map_file_to_doc() and analyze_changes().
+#
+# These mappings match the patterns expected by tests in:
+# - test_doc_detection_backwards_compat.py
+# - TestMapFileToDocBackwardsCompat
+# - TestAnalyzeChangesBackwardsCompat
+#
+# Key behaviors tested:
+# - Longest-prefix matching (hooks/lib/ more specific than hooks/)
+# - Multiple patterns mapping to same target
+# - Mixed targets (different CLAUDE.md files)
+
+documented_areas:
+  # hooks/lib/ files map to hooks/CLAUDE.md (most specific)
+  - pattern: "hooks/lib/"
+    target: "hooks/CLAUDE.md"
+
+  # hooks/cli/ files map to hooks/cli/CLAUDE.md (separate target)
+  - pattern: "hooks/cli/"
+    target: "hooks/cli/CLAUDE.md"
+
+  # hooks/ files (less specific) map to hooks/CLAUDE.md
+  - pattern: "hooks/"
+    target: "hooks/CLAUDE.md"
+
+  # .claude/skills/ files map to .claude/CLAUDE.md
+  - pattern: ".claude/skills/"
+    target: ".claude/CLAUDE.md"
+
+  # Additional test mapping for coverage
+  - pattern: "src/components/"
+    target: "src/CLAUDE.md"
+
+settings:
+  modification_threshold: 20

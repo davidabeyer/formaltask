@@ -1,0 +1,1 @@
+"""SessionEnd hook package."""

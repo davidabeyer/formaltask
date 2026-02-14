@@ -1,0 +1,61 @@
+# TDD Guard Ignore Patterns
+# Files matching these patterns are exempt from TDD Guard validation
+# Pattern syntax: glob format (** for recursive, * for wildcard)
+
+# Documentation files
+# Rationale: Documentation changes don't require test-first development
+*.md
+Documentation/**
+docs/**
+README*
+CHANGELOG*
+LICENSE*
+
+# Configuration files
+# Rationale: Config files are declarative, not executable code requiring tests
+*.json
+*.yaml
+*.yml
+*.toml
+*.ini
+*.cfg
+.env*
+
+# Shell scripts
+# Rationale: No TDD Guard reporter available for shell scripts yet
+*.sh
+hooks/**/*.sh
+scripts/**/*.sh
+scripts/bin/*
+
+# Build artifacts
+# Rationale: Generated files should never be edited directly
+**/__pycache__/**
+**/node_modules/**
+**/dist/**
+**/build/**
+**/.pytest_cache/**
+**/.mypy_cache/**
+**/coverage/**
+
+# Test configuration
+# Rationale: Test framework config doesn't need its own tests
+pytest.ini
+pyproject.toml
+jest.config.*
+vitest.config.*
+karma.conf.*
+
+# IDE and editor files
+# Rationale: Editor-specific settings aren't part of the codebase logic
+.vscode/**
+.idea/**
+*.swp
+*.swo
+*~
+
+# Git files
+# Rationale: Version control metadata doesn't require tests
+.git/**
+.gitignore
+.gitattributes

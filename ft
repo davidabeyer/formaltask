@@ -1,0 +1,3 @@
+#!/bin/bash
+# Direct runner - no pip install needed after changes
+exec python3 -m formaltask.cli "$@"

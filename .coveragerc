@@ -1,0 +1,28 @@
+[run]
+branch = true
+source = hooks
+omit =
+    hooks/tests/*
+    hooks/*/__pycache__/*
+    */.pyenv/*
+# Note: Use --cov-context=test with pytest instead of dynamic_context
+# to avoid conflicts with pytest-cov plugin
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    if __name__ == .__main__.:
+    if TYPE_CHECKING:
+show_missing = true
+precision = 2
+
+[html]
+directory = htmlcov
+show_contexts = true
+
+[json]
+output = coverage.json
+show_contexts = true

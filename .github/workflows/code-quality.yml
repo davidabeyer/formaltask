@@ -1,0 +1,84 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  schedule:
+    # Weekly audit every Monday at 9am UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+jobs:
+  duplicate-detection:
+    name: Duplicate Code Detection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Install jscpd
+        run: npm install -g jscpd
+
+      - name: Run duplicate detection
+        run: |
+          echo "## Duplicate Code Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Run jscpd and capture output
+          jscpd formaltask/ --config .jscpd.json --reporters console 2>&1 | tee jscpd-output.txt || true
+
+          # Check if duplicates found
+          if grep -q "Found [1-9]" jscpd-output.txt; then
+            echo "### Duplicates Found" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat jscpd-output.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "::warning::Duplicate code detected - review jscpd output"
+          else
+            echo "No significant duplicates found." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  tech-debt:
+    name: Tech Debt Tracking
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Scan for TODOs and FIXMEs
+        run: |
+          echo "## Tech Debt Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Count by type
+          TODO_COUNT=$(grep -rn "TODO" --include="*.py" formaltask/ hooks/ 2>/dev/null | wc -l || echo 0)
+          FIXME_COUNT=$(grep -rn "FIXME" --include="*.py" formaltask/ hooks/ 2>/dev/null | wc -l || echo 0)
+          HACK_COUNT=$(grep -rn "HACK\|XXX" --include="*.py" formaltask/ hooks/ 2>/dev/null | wc -l || echo 0)
+
+          echo "| Type | Count |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| TODO | $TODO_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "| FIXME | $FIXME_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "| HACK/XXX | $HACK_COUNT |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # List all items with file:line
+          echo "### Details" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$TODO_COUNT" -gt 0 ] || [ "$FIXME_COUNT" -gt 0 ] || [ "$HACK_COUNT" -gt 0 ]; then
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            grep -rn "TODO\|FIXME\|HACK\|XXX" --include="*.py" formaltask/ hooks/ 2>/dev/null | head -50 >> $GITHUB_STEP_SUMMARY || true
+            echo '```' >> $GITHUB_STEP_SUMMARY
+
+            TOTAL=$((TODO_COUNT + FIXME_COUNT + HACK_COUNT))
+            if [ "$TOTAL" -gt 20 ]; then
+              echo "::warning::High tech debt: $TOTAL items found"
+            fi
+          else
+            echo "No tech debt markers found." >> $GITHUB_STEP_SUMMARY
+          fi

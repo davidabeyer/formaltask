@@ -1,0 +1,189 @@
+/* =============================================================================
+   FORMALTASK DASHBOARD THEME - CATPPUCCIN MOCHA
+
+   External Textual CSS file for all dashboard styling.
+   Based on Catppuccin Mocha palette + Yellow/Gold accents.
+   Inspired by: https://harlequin.sh and https://posting.sh
+
+   Color Reference (Catppuccin Mocha):
+   - Base:     #1e1e2e  (darkest background)
+   - Mantle:   #181825  (darker background)
+   - Surface0: #313244  (elevated surfaces)
+   - Overlay0: #6c7086  (muted text)
+   - Overlay2: #9399b2  (dim elements)
+   - Text:     #cdd6f4  (primary text)
+   - Yellow:   #f9e2af  (accent/highlight)
+   - Red:      #f38ba8  (error/danger)
+   - Green:    #a6e3a1  (success)
+   - Blue:     #89b4fa  (info)
+   - Sky:      #89dceb  (secondary info)
+   - Mauve:    #cba6f7  (special states)
+   - Peach:    #fab387  (warnings)
+   ============================================================================= */
+
+
+/* =============================================================================
+   BASE THEME
+   Screen-level defaults and layout containers
+   ============================================================================= */
+
+/* Utility class for hiding widgets - CRITICAL for layout */
+.hidden {
+    display: none;
+}
+
+/* Base screen - dark Catppuccin Mocha background */
+Screen {
+    background: #1e1e2e;
+    color: #cdd6f4;
+}
+
+/* Header styling - yellow accent (use !important to override Textual's $panel default) */
+Header {
+    background: #1e1e2e !important;
+    color: #cdd6f4;
+    dock: top;
+    height: 1;
+}
+
+Header > * {
+    background: #1e1e2e !important;
+}
+
+HeaderIcon {
+    background: #1e1e2e !important;
+}
+
+HeaderTitle {
+    background: #1e1e2e !important;
+    color: #f9e2af;
+    text-style: bold;
+}
+
+HeaderClockDisplay {
+    background: #1e1e2e !important;
+}
+
+/* Footer - keybindings with Harlequin styling */
+Footer {
+    background: #1e1e2e !important;
+    color: #89dceb;
+    dock: bottom;
+}
+
+FooterKey {
+    text-style: none;
+    background: #1e1e2e;
+    color: #f9e2af;
+}
+
+FooterKey > .footer-key--key {
+    color: #89dceb;
+    background: #1e1e2e;
+    text-style: bold;
+}
+
+FooterKey > .footer-key--description {
+    padding: 0 1 0 0;
+    color: #f9e2af;
+    background: #1e1e2e;
+}
+
+FooterKey:hover {
+    background: #313244;
+}
+
+FooterKey:hover > .footer-key--key {
+    background: #313244;
+}
+
+
+/* =============================================================================
+   WIDGET STYLES
+   StatusBar, TaskList, TaskRow
+   ============================================================================= */
+
+/* --- StatusBar (fixed top, single line) --- */
+
+#status-bar {
+    dock: top;
+    height: 1;
+    background: transparent;
+    color: #cdd6f4;
+    padding: 0 0 0 2;
+}
+
+/* --- TaskList (full width, scrollable) --- */
+
+#task-list {
+    width: 100%;
+    height: 1fr;
+    background: transparent;
+    border: round #89b4fa;
+    border-title-align: left;
+    border-title-color: #89b4fa;
+    padding: 0 1;
+}
+
+#task-list:focus-within {
+    border: round #89dceb;
+    border-title-color: #89dceb;
+}
+
+/* --- TaskRow items --- */
+
+TaskRow {
+    height: auto;
+    width: 100%;
+    padding: 0;
+    background: transparent;
+}
+
+TaskRow:hover {
+    background: #313244 30%;
+}
+
+TaskRow.--selected {
+    background: #f9e2af 15%;
+    text-style: bold;
+}
+
+.queue-separator {
+    color: #6c7086;
+    text-align: center;
+    height: 1;
+    margin-top: 1;
+}
+
+.queue-separator-bottom {
+    height: 1;
+    border-bottom: solid #313244;
+}
+
+/* --- Terminal pane (always-on, below task list) --- */
+
+#terminal-pane {
+    height: 1fr;
+    min-height: 6;
+    border: round #89b4fa;
+    border-title-align: left;
+    border-title-color: #89b4fa;
+    background: #181825;
+    color: #cdd6f4;
+    padding: 0 1;
+}
+
+
+/* =============================================================================
+   STATE-BASED STYLES
+   Utility classes for dynamic state coloring
+   ============================================================================= */
+
+/* Accent color utility classes */
+.accent-cyan { color: #89dceb; }
+.accent-yellow { color: #f9e2af; }
+.accent-pink { color: #f5c2e7; }
+.accent-green { color: #a6e3a1; }
+.accent-red { color: #f38ba8; }
+.accent-mauve { color: #cba6f7; }
+.muted { color: #6c7086; }

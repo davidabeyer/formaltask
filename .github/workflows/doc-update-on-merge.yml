@@ -1,0 +1,232 @@
+name: Batch README.md Documentation Update
+
+on:
+  # Weekly batch run
+  schedule:
+    - cron: '0 9 * * 1'  # Monday 9am UTC
+  # Manual trigger with options
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'Days to look back for merged PRs'
+        required: false
+        default: '7'
+      dry_run:
+        description: 'Dry run (analyze only, no PR)'
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  batch-update-documentation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Collect significant merged PRs
+        id: collect
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          LOOKBACK="${{ github.event.inputs.lookback_days || '7' }}"
+          SINCE=$(date -d "$LOOKBACK days ago" +%Y-%m-%d)
+
+          echo "Collecting PRs merged since $SINCE..."
+
+          # Get merged PRs, excluding bots and doc PRs
+          prs=$(gh pr list --state merged --search "merged:>=$SINCE" --json number,title,changedFiles,additions,deletions,files --jq '
+            .[] | select(
+              (.title | startswith("docs:") | not) and
+              (.title | startswith("chore:") | not) and
+              (.title | startswith("style:") | not)
+            )
+          ')
+
+          # Filter for significant PRs (>20 lines changed, has code files)
+          significant_prs=()
+          significant_details=""
+
+          while IFS= read -r pr; do
+            [[ -z "$pr" ]] && continue
+
+            number=$(echo "$pr" | jq -r '.number')
+            title=$(echo "$pr" | jq -r '.title')
+            additions=$(echo "$pr" | jq -r '.additions')
+            deletions=$(echo "$pr" | jq -r '.deletions')
+            total=$((additions + deletions))
+
+            # Get file types
+            files=$(echo "$pr" | jq -r '.files[].path')
+            has_code=false
+            has_tests_only=true
+
+            for file in $files; do
+              # Check if it's a code file (not just tests/docs/config)
+              if [[ "$file" =~ \.(py|ts|js|go|rs)$ ]]; then
+                has_code=true
+                if [[ ! "$file" =~ (test_|_test\.|\.test\.|spec\.|conftest) ]]; then
+                  has_tests_only=false
+                fi
+              fi
+            done
+
+            # Significance criteria:
+            # - At least 20 lines changed
+            # - Contains code files
+            # - Not test-only changes
+            if [[ $total -ge 20 ]] && [[ "$has_code" == "true" ]] && [[ "$has_tests_only" == "false" ]]; then
+              significant_prs+=("$number")
+              significant_details+="- #$number: $title (+$additions/-$deletions)\n"
+              echo "✓ Significant: #$number - $title ($total lines)"
+            else
+              echo "✗ Skipped: #$number - $title (total=$total, code=$has_code, tests_only=$has_tests_only)"
+            fi
+          done <<< "$prs"
+
+          if [[ ${#significant_prs[@]} -eq 0 ]]; then
+            echo "No significant PRs found in the last $LOOKBACK days"
+            echo "has_significant=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # Save results
+          echo "has_significant=true" >> $GITHUB_OUTPUT
+          echo "pr_count=${#significant_prs[@]}" >> $GITHUB_OUTPUT
+          printf '%s\n' "${significant_prs[@]}" > /tmp/significant_prs.txt
+          echo -e "$significant_details" > /tmp/pr_details.txt
+
+          echo ""
+          echo "Found ${#significant_prs[@]} significant PRs:"
+          echo -e "$significant_details"
+
+      - name: Build consolidated context
+        if: steps.collect.outputs.has_significant == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Collect all changed files across significant PRs
+          declare -A all_files
+
+          while read -r pr_num; do
+            files=$(gh pr view "$pr_num" --json files --jq '.files[].path')
+            for f in $files; do
+              all_files["$f"]=1
+            done
+          done < /tmp/significant_prs.txt
+
+          # Find relevant README.md files
+          declare -A readme_map
+          for file in "${!all_files[@]}"; do
+            dir=$(dirname "$file")
+            while [[ "$dir" != "." && "$dir" != "/" ]]; do
+              readme="$dir/README.md"
+              if [[ -f "$readme" ]]; then
+                readme_map["$readme"]=1
+                break
+              fi
+              dir=$(dirname "$dir")
+            done
+          done
+
+          # Build context file
+          echo "# Documentation Update Context" > /tmp/batch_context.md
+          echo "" >> /tmp/batch_context.md
+          echo "## Significant PRs to Process" >> /tmp/batch_context.md
+          cat /tmp/pr_details.txt >> /tmp/batch_context.md
+          echo "" >> /tmp/batch_context.md
+
+          echo "## Relevant README.md Files" >> /tmp/batch_context.md
+          for readme in "${!readme_map[@]}"; do
+            echo "- $readme" >> /tmp/batch_context.md
+          done
+          echo "" >> /tmp/batch_context.md
+
+          # Include current README content (truncated for large files)
+          echo "## Current Documentation State" >> /tmp/batch_context.md
+          for readme in "${!readme_map[@]}"; do
+            echo "" >> /tmp/batch_context.md
+            echo "### $readme" >> /tmp/batch_context.md
+            if [[ $(wc -l < "$readme") -gt 500 ]]; then
+              head -200 "$readme" >> /tmp/batch_context.md
+              echo "" >> /tmp/batch_context.md
+              echo "[... truncated, read full file if needed ...]" >> /tmp/batch_context.md
+            else
+              cat "$readme" >> /tmp/batch_context.md
+            fi
+          done
+
+          # Save readme list
+          printf '%s\n' "${!readme_map[@]}" | tr '\n' ',' | sed 's/,$//' > /tmp/readme_list.txt
+
+      - name: Generate batch documentation updates
+        if: steps.collect.outputs.has_significant == 'true' && github.event.inputs.dry_run != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          show_full_output: true
+          prompt: |
+            You are processing a BATCH of ${{ steps.collect.outputs.pr_count }} significant PRs for documentation updates.
+
+            ## Context
+            Read /tmp/batch_context.md first - it contains:
+            - List of significant PRs to process
+            - Relevant README.md files
+            - Current documentation state
+
+            ## Task
+            1. For each PR listed, read its diff: `git show <commit>` or `gh pr view <number> --json`
+            2. Identify documentation-worthy changes across ALL PRs:
+               - New patterns or conventions
+               - New gotchas or edge cases
+               - Architecture decisions
+               - New commands or workflows
+               - Breaking changes or deprecations
+
+            3. CONSOLIDATE updates - don't create separate sections per PR
+               - Group related changes together
+               - Update existing sections rather than appending
+               - Maintain documentation flow and readability
+
+            4. VERIFY accuracy:
+               - Read actual source files for field names, return types
+               - Check error handling matches documentation
+               - Use exact names from code
+
+            5. If updates ARE needed:
+               - Edit the appropriate README.md files
+               - Commit with message: "docs: Batch README update for PRs [list]"
+               - Create single PR titled: "docs: Batch README.md update (Week of $(date +%Y-%m-%d))"
+               - Output: PR_CREATED=true
+
+            6. If NO updates needed (all changes are internal/minor):
+               - Output: PR_CREATED=false
+               - Explain why no updates were needed
+
+            ## Quality Standards
+            - Keep updates concise and actionable
+            - Don't add historical task references (no "Task #123" in docs)
+            - Don't add completion summaries or changelogs
+            - Focus on evergreen documentation
+
+          claude_args: '--model claude-sonnet-4-20250514 --allowedTools "Edit,Write,Read,Glob,Grep,Bash(git diff:*),Bash(git show:*),Bash(git log:*),Bash(git checkout:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(cat:*)"'
+
+      - name: Dry run summary
+        if: steps.collect.outputs.has_significant == 'true' && github.event.inputs.dry_run == 'true'
+        run: |
+          echo "=== DRY RUN SUMMARY ==="
+          echo ""
+          echo "Would process ${{ steps.collect.outputs.pr_count }} significant PRs:"
+          cat /tmp/pr_details.txt
+          echo ""
+          echo "Would update README files:"
+          cat /tmp/readme_list.txt
+          echo ""
+          echo "Run without dry_run to create documentation PR."

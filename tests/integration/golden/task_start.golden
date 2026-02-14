@@ -1,0 +1,371 @@
+<task_assignment>
+# Task #42: Add authentication
+
+**SCOPE: This task only. Other PRP tasks are context, not assignments.**
+
+## Acceptance Criteria
+- Login endpoint returns JWT token
+- Password hashing uses bcrypt
+- Rate limiting on login attempts
+
+## Acceptance Verification Commands
+
+These commands will be run to verify your work passes:
+
+- **Login endpoint returns JWT token**
+  ```
+  pytest tests/test_auth.py -v
+  ```
+- **Password hashing uses bcrypt**
+  ```
+  python3 -c "from auth import hash_password; assert hash_password("test")"
+  ```
+- **Rate limiting on login attempts**
+  ```
+  pytest tests/test_rate_limit.py -v
+  ```
+
+## PRP
+title: Add authentication
+summary: Implement auth flow
+
+## Recommended Skills
+Invoke these skills when relevant to your work:
+- `/test-driven-development` - invoke when needed
+</task_assignment>
+
+<methodology>
+## Task Decomposition (Before Writing Code)
+
+**FIRST**: Use TodoWrite to decompose this task into actionable items:
+- Map each acceptance criterion to one or more todos
+- Break complex steps into smaller, testable units
+- Make todos specific and measurable
+- Mark first todo as `in_progress` before starting work
+
+**Progress Tracking Rules:**
+- Mark todos completed immediately after each item (don't batch)
+- Only one todo should be `in_progress` at any time
+- Add new todos if you discover additional work during implementation
+
+## TDD Workflow (Non-Negotiable)
+
+**Red-Green-Refactor Cycle:**
+1. **RED** - Write a failing test first, verify it actually fails
+2. **GREEN** - Write minimal code to make the test pass
+3. **REFACTOR** - Improve code quality while keeping tests green
+
+**Rules:**
+- NEVER write implementation before a test exists for that behavior
+- ALWAYS verify test fails with expected error before implementing
+- Write minimal code to pass the current test (no over-engineering)
+</methodology>
+
+
+<review_resolution>
+## Review Finding Resolution
+
+**First, view all findings with status:**
+```bash
+ft review disposition --list   # Shows all findings with P0-P3 priority and resolution status
+```
+
+When review findings block task completion:
+
+1. **Fix the issue** - Your first responsibility. ALL findings are yours to fix.
+2. **Mark as wontfix** - If legitimately cannot fix (--reason REQUIRED):
+   ```bash
+   ft review disposition FILE LINE --reason "Pre-existing in legacy code"
+   ```
+3. **Escalate to human** - If you're STUCK and need human judgment:
+   ```bash
+   ft review disposition FILE LINE --reason "Security tradeoff needs architect" --needshuman
+   ```
+4. **Re-run review** - After fixing or marking disposition
+
+**Disposition CLI (--reason REQUIRED):**
+```bash
+ft review disposition FILE LINE --reason "REASON"              # wontfix, passes gate
+ft review disposition FILE LINE --reason "REASON" --needshuman # escalate, blocks for human
+ft review disposition --list                                    # show all
+ft review disposition --clear FILE LINE                         # remove entry
+```
+
+**Valid wontfix reasons:**
+- `"Pre-existing in legacy code"`
+- `"Out of scope for this task"`
+- `"Will be addressed in separate epic"`
+- `"Requires breaking change"`
+- `"False positive: <why reviewer was wrong>"`
+
+**Invalid reasons (fix instead):**
+- `"Too hard"` / `"No time"` / `"Low priority"` → these will be rejected
+
+**When to use --needshuman:**
+Use ONLY when you're stuck and need human judgment:
+- Security tradeoffs requiring architect review
+- Architectural decisions beyond task scope
+- Unclear requirements needing clarification
+- Genuinely uncertain if finding is valid
+
+Human sees escalations in `/inbox` and resolves or marks wontfix.
+</review_resolution>
+
+
+<quality_standards>
+## Testing Anti-Patterns to Avoid
+
+- **Mock abuse**: Only mock external deps (APIs, DB, network)
+- **Use real objects** for validators, business logic, internal code
+- **Test behavior**, not implementation details
+- **One behavior per test** - keep tests under 20 lines
+- **Descriptive names**: test_<component>_<scenario>_<expected>
+</quality_standards>
+
+
+<completion_workflow>
+## Task Completion Workflow
+
+Follow this workflow in order. Do NOT skip steps.
+
+### Required Todos (MANDATORY)
+
+Your TodoWrite MUST include these workflow steps:
+1. **Run required reviews**
+2. **Validate findings**
+3. **Fix findings**
+4. **Verify fixes**
+5. **Capture learnings**
+6. **Create PR**
+7. **Merge PR**
+8. **Complete task**
+
+A PreToolUse hook validates your todos include these steps.
+
+---
+
+### Pre-Completion Checklist
+
+Before attempting completion, verify:
+- [ ] All acceptance criteria have concrete evidence (tests pass, output shown)
+- [ ] Linter passes: `ruff check <changed_files>` with no errors
+- [ ] All changes committed: `git status` shows clean working tree
+
+If any check fails, fix it first.
+
+### Commit and Push
+
+```bash
+git add -A && git commit -m "feat(task-42): <description>" && git push
+```
+### Run Required Reviews
+
+Required review types: code-quality, security
+
+
+Spawn code-quality:
+```python
+Task(subagent_type="code-reviewer", description="Review task #42: Add authentication")
+```
+Address any P0/P1 findings before completing.
+
+
+Spawn security:
+```python
+Task(subagent_type="code-reviewer", description="Security-focused review for task #42: Add authentication")
+```
+Address all security findings before completing.
+
+
+Wait for the review to complete and examine the findings.
+
+### Validate Findings (YOU Must Do This)
+
+For EACH finding (P0-P3), read the actual code and determine:
+
+| Verdict | Meaning | Action |
+|---------|---------|--------|
+| **VALID** | Finding points to real issue | Fix it |
+| **FALSE POSITIVE** | Reviewer misunderstood code/context | Mark disposition |
+
+**Be ruthless**: Don't blindly accept findings. Verify each one by reading the code yourself.
+
+Use TodoWrite to track validation:
+```python
+TodoWrite(todos=[
+    {"content": "Validate P0: <summary>", "status": "in_progress", "activeForm": "Validating P0 finding"},
+    {"content": "Validate P1: <summary>", "status": "pending", "activeForm": "Validating P1 finding"},
+])
+```
+
+### Address Valid Findings
+
+ALL findings are yours to fix. For each finding:
+
+1. **Fix it** - Your first responsibility
+2. **Mark wontfix** - If legitimately cannot fix (--reason REQUIRED):
+   ```bash
+   ft review disposition FILE LINE --reason "Pre-existing in legacy code"
+   ft review disposition FILE LINE --reason "False positive: <why reviewer was wrong>"
+   ```
+3. **Escalate** - ONLY if stuck and need human judgment:
+   ```bash
+   ft review disposition FILE LINE --reason "Security tradeoff needs architect" --needshuman
+   ```
+   This blocks until human resolves via `/inbox`.
+
+### Commit Fixes
+
+If you made any fixes:
+```bash
+git add -A && git commit -m "fix(task-42): address review findings" && git push
+```
+
+### Verify Fixes (Sonnet Agent)
+
+After fixing, use the **verification-reviewer** (sonnet) to confirm fixes and detect regressions:
+
+```python
+Task(
+    subagent_type="verification-reviewer",
+    description="Verify fixes for task #42",
+    prompt="Verify fixes for task #42. Original findings: <paste P0-P3 findings from Run Required Reviews>. Confirm each is addressed and check for regressions introduced by fixes."
+)
+```
+
+This is lighter-weight than a full code-reviewer (opus) since it focuses only on verifying known issues are fixed.
+
+If regressions or unaddressed findings appear, go back to **Validate Findings**.
+### Share Learnings (Optional)
+
+Before completing, consider sharing insights with sibling tasks.
+
+**Step 1: See sibling specs** (optional)
+```
+/reflect
+```
+Shows incomplete sibling task specs so you know what they're working on.
+
+**Step 2: Share if useful**
+```bash
+ft learning "insight" --for <sibling_task_ids>
+```
+
+**Examples:**
+```bash
+# Gotcha that would help sibling
+ft learning "Monkeypatching imports requires module-level patching" --for 2685
+
+# Pattern useful to multiple siblings
+ft learning "SQLite WAL mode improves concurrent writes" --for 2685,2690
+```
+
+**Share** if it saves time or prevents mistakes. **Skip** if nothing to share.
+
+### Create PR and Wait for CI
+
+```bash
+gh pr create --title "Task #42: <title>" --body "Closes task #42"
+```
+
+Wait for all CI checks to pass:
+```bash
+gh pr checks --watch --fail-fast --interval 60
+```
+
+**CI MONITORING CONSTRAINTS:**
+1. **Use ONLY `gh pr checks --watch`** to wait for CI. This shows pass/fail status without log output.
+2. **NEVER use `gh run watch`** — it streams thousands of lines of CI logs into your context, wasting tokens.
+3. **NEVER use `gh api`, `gh run view`, or `gh pr view --json statusCheckRollup`** — redundant API calls exhaust the rate limit (5000/hr shared across all workers).
+
+If CI fails, run `gh run view <run-id> --log-failed 2>&1 | head -50` to see ONLY the failure output, not the full log.
+
+If CI fails, read the failure output, fix the issue, push, and re-run `gh pr checks --watch --fail-fast --interval 60`.
+
+### Merge PR
+
+Check mergeability and merge:
+```bash
+gh pr view --json mergeable --jq '.mergeable'
+```
+
+- If `MERGEABLE`: merge the PR:
+  ```bash
+  gh pr merge --squash --delete-branch
+  ```
+- If `CONFLICTING`: you cannot resolve this — escalate:
+  ```bash
+  python3 -m formaltask.cli.pm work blocked "Merge conflict on PR — needs manual rebase"
+  ```
+- If `UNKNOWN`: CI may still be running. Wait and re-check.
+
+### Complete Task
+
+```bash
+python3 -m formaltask.cli.pm task complete 42
+```
+
+If this fails, read the error and address it. Common issues:
+- Missing commits -> commit and push
+- Error says "Run: ft work blocked" -> do it immediately, do not retry
+- Review findings still open -> go back to **Validate Findings**
+
+### Loop Until Success
+
+Do NOT stop until you see: `Task #42 completed successfully`
+
+If completion fails, fix the issue and retry. Common retry scenarios:
+- Review findings -> address findings, re-run reviews, retry completion
+- Missing commits -> commit and push, retry completion
+- CI failure -> fix, push, wait for CI again
+- Merge conflict -> run `ft work blocked` to escalate
+
+If genuinely stuck after 3+ attempts:
+```bash
+python3 -m formaltask.cli.pm work blocked "<describe what's blocking you>"
+```
+</completion_workflow>
+
+<escalation_protocol>
+## When to Escalate to Human
+
+**Use your best judgment first.** Only escalate if you ABSOLUTELY cannot proceed without human intervention.
+
+Escalate when ALL of these are true:
+1. You have exhausted reasonable approaches (tried 3+ different solutions)
+2. The blocker is external to your capabilities (credentials, architecture decisions, ambiguous requirements)
+3. Continuing would risk wasted effort or incorrect implementation
+
+**Common escalation scenarios:**
+- Need API credentials or secrets you don't have access to
+- Target files were deleted/refactored by another task (merge conflicts you can't resolve)
+- Security-sensitive changes requiring human sign-off
+- Requirements are contradictory and you need clarification
+- Test failures persist after 3+ fix attempts with different approaches
+
+**Do NOT escalate for:**
+- Things you can figure out by reading code or documentation
+- Minor uncertainties where either choice is reasonable
+- Problems you haven't actually tried to solve yet
+
+## How to Escalate
+
+Use the CLI command (this registers the block and notifies humans via `/inbox`):
+
+```bash
+python3 -m formaltask.cli.pm blocked "<brief description of what's blocking you>"
+```
+
+**Examples:**
+```bash
+python3 -m formaltask.cli.pm blocked "Need OPENROUTER_API_KEY to test LLM integration"
+python3 -m formaltask.cli.pm blocked "pm_dashboard.py deleted in Task #2322 - need guidance on new architecture"
+python3 -m formaltask.cli.pm blocked "Auth flow unclear - OAuth vs JWT decision needed"
+```
+
+**Important:** Human will see blocked workers in `/inbox` and can resolve or provide guidance.
+</escalation_protocol>
+
+
+<scope_constraints>
+</scope_constraints>

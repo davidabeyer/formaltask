@@ -1,0 +1,3 @@
+{"type": "human", "message": {"content": "Hello"}}
+not valid json at all
+{"type": "assistant", "message": {"content": "This line is valid but previous was not"}}

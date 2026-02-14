@@ -1,0 +1,247 @@
+name: Static Analysis
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '20'
+
+jobs:
+  pyright:
+    name: Type Checking (Pyright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'basedpyright'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Run Pyright baseline check
+        run: |
+          echo "Running type checking with Pyright baseline..."
+          # Fails CI if new type errors are introduced beyond baseline
+          # --baselinemode=discard: reads baseline but allows fixing errors without failing
+          basedpyright --baselinemode=discard formaltask/
+
+      - name: Run Pyright
+        if: always()
+        run: |
+          echo "Running type checking with Pyright..."
+          basedpyright formaltask/ --outputjson > pyright-results.json || true
+          # Show human-readable output
+          basedpyright formaltask/ || echo "Pyright found type errors (non-blocking for now)"
+
+      - name: Upload Pyright results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pyright-results
+          path: pyright-results.json
+          retention-days: 7
+
+  semgrep:
+    name: Security Analysis (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'semgrep'
+
+      - name: Run Semgrep
+        run: |
+          echo "Running security analysis with Semgrep..."
+          semgrep scan \
+            --config=auto \
+            --error \
+            --json \
+            --output=semgrep-results.json \
+            formaltask/ || SEMGREP_EXIT=$?
+
+          # Also output human-readable format
+          semgrep scan --config=auto formaltask/ || true
+
+          # Fail on security errors
+          if [ "${SEMGREP_EXIT:-0}" -ne 0 ]; then
+            echo "Semgrep found security issues!"
+            exit 1
+          fi
+
+      - name: Upload Semgrep results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: semgrep-results
+          path: semgrep-results.json
+          retention-days: 7
+
+  mutation-testing:
+    name: Mutation Testing (mutmut)
+    runs-on: ubuntu-latest
+    needs: [pyright, semgrep]
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Python environment
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          extra-packages: 'mutmut pytest pytest-cov'
+
+      - name: Cache mutation testing results
+        uses: actions/cache@v4
+        with:
+          path: |
+            .mutmut-cache
+            mutants/
+          key: mutmut-${{ runner.os }}-${{ hashFiles('formaltask/**/*.py') }}
+          restore-keys: |
+            mutmut-${{ runner.os }}-
+
+      - name: Generate coverage data
+        run: |
+          echo "Generating coverage data for mutation testing..."
+          # Use tests/unit/ for coverage (matches pyproject.toml mutmut config)
+          # These are isolated unit tests designed to test formaltask/ modules
+          pytest tests/unit/test_worker_monitor.py \
+            tests/unit/test_crash_detector.py \
+            tests/unit/test_inbox.py \
+            --cov=formaltask \
+            --cov-report=xml \
+            -x -q || echo "Some tests failed (continuing with mutation testing)"
+
+      - name: Run mutation testing
+        id: mutmut
+        run: |
+          echo "Running mutation testing..."
+          echo "Target: formaltask/"
+          echo ""
+
+          # Run mutmut (configuration in pyproject.toml)
+          mutmut run --max-children 4 || true
+
+          # Capture results
+          echo ""
+          echo "=== Mutation Testing Results ==="
+          mutmut results | tee mutmut-summary.txt
+
+          # Extract score for badge/summary
+          KILLED=$(grep -oP 'Killed: \K\d+' mutmut-summary.txt || echo "0")
+          SURVIVED=$(grep -oP 'Survived: \K\d+' mutmut-summary.txt || echo "0")
+          TOTAL=$((KILLED + SURVIVED))
+
+          if [ "$TOTAL" -gt 0 ]; then
+            SCORE=$(echo "scale=1; $KILLED * 100 / $TOTAL" | bc)
+          else
+            SCORE="0"
+          fi
+
+          echo ""
+          echo "Mutation Score: ${SCORE}%"
+          echo "mutation_score=${SCORE}" >> $GITHUB_OUTPUT
+
+          # Check against threshold (75% target)
+          if (( $(echo "$SCORE < 60" | bc -l) )); then
+            echo ""
+            echo "WARNING: Mutation score below 60% minimum!"
+            echo "mutation_status=failed" >> $GITHUB_OUTPUT
+          elif (( $(echo "$SCORE < 75" | bc -l) )); then
+            echo ""
+            echo "NOTE: Mutation score below 75% target"
+            echo "mutation_status=warning" >> $GITHUB_OUTPUT
+          else
+            echo ""
+            echo "Mutation score meets 75% target!"
+            echo "mutation_status=passed" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate HTML report
+        if: always()
+        run: |
+          mutmut html || echo "Could not generate HTML report"
+
+      - name: Upload mutation results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: |
+            mutmut-summary.txt
+            html/
+          retention-days: 14
+
+      - name: Post mutation score to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const score = '${{ steps.mutmut.outputs.mutation_score }}';
+            const status = '${{ steps.mutmut.outputs.mutation_status }}';
+
+            let emoji = '';
+            let message = '';
+
+            if (status === 'passed') {
+              emoji = ':white_check_mark:';
+              message = 'Excellent test quality!';
+            } else if (status === 'warning') {
+              emoji = ':warning:';
+              message = 'Consider improving test coverage.';
+            } else {
+              emoji = ':x:';
+              message = 'Tests need improvement.';
+            }
+
+            const body = `## ${emoji} Mutation Testing Results
+
+            **Mutation Score:** ${score}%
+
+            ${message}
+
+            | Threshold | Score |
+            |-----------|-------|
+            | Minimum (60%) | ${parseFloat(score) >= 60 ? ':white_check_mark:' : ':x:'} |
+            | Target (75%) | ${parseFloat(score) >= 75 ? ':white_check_mark:' : ':x:'} |
+            | Excellent (80%) | ${parseFloat(score) >= 80 ? ':white_check_mark:' : ':x:'} |
+
+            <details>
+            <summary>What is mutation testing?</summary>
+
+            Mutation testing measures test quality by introducing small changes (mutations) to your code and checking if tests catch them. A higher score means your tests are better at detecting bugs.
+
+            </details>`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
