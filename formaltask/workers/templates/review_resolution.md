@@ -13,11 +13,16 @@ When review findings block task completion:
    ```bash
    ft review disposition FILE LINE --reason "Pre-existing in legacy code"
    ```
-3. **Escalate to human** - If you're STUCK and need human judgment:
+3. **Defer to new task** - If the finding is real but out of scope for YOUR task:
+   ```bash
+   ft task create-from-finding FILE LINE --title "Fix edge case in session expiry"
+   ```
+   This creates a critique-gated task with self-review. Another worker picks it up. You continue working.
+4. **Escalate to human** - If you're STUCK and need human judgment:
    ```bash
    ft review disposition FILE LINE --reason "Security tradeoff needs architect" --needshuman
    ```
-4. **Re-run review** - After fixing or marking disposition
+5. **Re-run review** - After fixing, deferring, or marking disposition
 
 **Disposition CLI (--reason REQUIRED):**
 ```bash
@@ -27,9 +32,13 @@ ft review disposition --list                                    # show all
 ft review disposition --clear FILE LINE                         # remove entry
 ```
 
+**When to defer vs wontfix:**
+- Finding is real AND fixable by another worker → `create-from-finding` (spawns a task)
+- Finding is real but NOT worth fixing (pre-existing, false positive) → `disposition --reason`
+- Not sure if finding is valid → `disposition --needshuman`
+
 **Valid wontfix reasons:**
 - `"Pre-existing in legacy code"`
-- `"Out of scope for this task"`
 - `"Will be addressed in separate epic"`
 - `"Requires breaking change"`
 - `"False positive: <why reviewer was wrong>"`
