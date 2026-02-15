@@ -2,6 +2,134 @@
 
 Structured task management for AI-assisted development workflows. Integrates with Claude Code to provide epic-based planning, parallel task execution, and automated review workflows.
 
+## How It Works
+
+```
+Plan → Critique → Specs → Tasks → Workers → Complete → Merge
+```
+
+You describe what you want. `/plan` explores the codebase and writes a plan. `/critique` pokes holes. `/decompose` splits it into YAML specs. `ft epic-decompose` commits tasks to SQLite with dependency tracking. `ft work spawn` launches parallel Claude workers in isolated git worktrees.
+
+The database is the coordination backbone — not just storage.
+
+### Plans Carry Their Revision History
+
+Critiques don't live in separate files — they're embedded in the plan:
+
+```yaml
+goals:
+  - id: "g-1"
+    current: "Users can log in with email/password"
+    history:
+      - version: "r1"
+        text: "Users can log in"
+        critique:
+          verdict: "FIX_AND_SHIP"
+          findings:
+            - priority: "P1"
+              finding: "Missing rate limiting"
+              action: "Add rate limiter"
+              resolution: "fixed"  # Set by /revise
+```
+
+Each `/critique` round appends to `history`. When `/revise` addresses findings, it sets `resolution: fixed|rejected|deferred`. The plan carries its full revision history.
+
+### Specs Are Contracts, Guards Enforce Them
+
+Specs declare what the completion system will check:
+
+```yaml
+title: "Task 2: Implement API client"
+depends_on: [1]
+required_reviews: ["code-quality", "security"]
+inputs:
+  schema: "$task[1].outputs.schema"       # Auto-wired from Task 1
+outputs:
+  client: ".artifacts/api_client.py"      # Task 3 can reference this
+acceptance_criteria:
+  - id: "c-1"
+    current: "GET /users returns parsed User objects"
+    command: "pytest tests/test_api.py"   # Runnable verification
+```
+
+When `ft task complete` runs, the completion check evaluates: Did `required_reviews` all pass? Are acceptance criteria with `command:` fields passing? The spec is the contract. Guards enforce it.
+
+### The Rules Kernel
+
+Completion checks, orchestration, and prompt generation use the same type:
+
+```python
+@dataclass
+class Rule:
+    when: str      # condition DSL
+    then: str      # output (phase name or Jinja2 template)
+    target: str    # what it applies to ("task.phase", "notify", "tool.block")
+    priority: int  # 0 = informational, 1 = blocks, 999 = catchall
+    name: str      # reason (literal or state key for dynamic lookup)
+```
+
+The kernel is ~60 LOC: `evaluate(condition, context) → bool`, `render(template, context) → str`, `apply_rules(rules, context)` where first match wins. The same evaluator answers: "Is this task done?" "Should we spawn a CI fixer?" "What prompt should this worker get?"
+
+The condition DSL supports `AND`, `OR`, `NOT`, comparisons (`==`, `!=`, `>`, `<`), dotted path resolution (`task.metadata.retries`), and bare truthy checks. No parentheses — flatten complex conditions into multiple rules.
+
+22 builtin rules handle the standard completion lifecycle. Three rule sets ship by default:
+
+| Rule set | Purpose |
+|----------|---------|
+| `BUILTIN_RULES` | 22 completion rules (review gates, PR checks, docs, acceptance criteria) |
+| `ORCHESTRATION_RULES` | Watch daemon triggers (e.g., alert after 1 hour) |
+| `TOOL_REDIRECT_RULES` | Block/redirect tool usage (e.g., WebSearch → exa) |
+
+#### Custom Rules Per Task
+
+Tasks can define their own rules in `metadata.completion_rules`. These are prepended before `BUILTIN_RULES`, so they get first-match-wins priority:
+
+```python
+# In a spec or task metadata:
+"completion_rules": [
+    {
+        "when": "blocking_findings AND review_rounds.self-critique >= 2",
+        "then": "needs_escalation",
+        "target": "task.phase",
+        "priority": 1,
+        "name": "Round cap hit. Escalate to human."
+    }
+]
+```
+
+This lets individual tasks define their own completion policies without modifying global rules.
+
+#### User Templates
+
+Worker prompt templates use the same kernel. Drop a Jinja2 file in `~/.claude/templates/` to override any bundled template — user templates take priority, with automatic fallback to bundled on parse errors.
+
+### Workers Create Their Own Tasks
+
+A worker that finds a problem during review can create a new task on the spot:
+
+```bash
+ft task create-from-finding src/auth.py 42 --title "Fix session expiry edge case"
+```
+
+This creates a **critique-gated** task — a task with self-critique baked in:
+
+1. The task starts in a **critique phase** (`c1`). The worker must self-review before moving to execution.
+2. A custom completion rule caps critique rounds: if P0/P1 findings persist after 2 self-critique rounds, the task escalates to a human via `ft work blocked`.
+3. Only after receiving a `verdict_go` does the task transition to the **exec phase** where normal completion rules apply.
+
+The task inherits its epic from the spawning worker, carries provenance (`source_task_id`, `finding_ref`), and can be auto-spawned by the watch daemon.
+
+### What Falls Out
+
+Because everything routes through rules and the database:
+
+- Auto-spawn fixer tasks when CI fails
+- Nudge stuck workers after 30 minutes
+- Inject thorough-approach prompts for complex tasks
+- Wire outputs to inputs across task dependencies
+- Block completion until required reviews pass
+- Workers spawn new tasks mid-flight, with their own completion policies
+
 ## Quick Start
 
 ```bash
