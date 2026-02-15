@@ -165,6 +165,7 @@ class TaskList(Static):
                         status="queued",
                         phase="queued",
                         elapsed_seconds=0,
+                        epic_name=task.get("epic_name"),
                     )
                 )
 
