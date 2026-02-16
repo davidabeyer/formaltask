@@ -15,7 +15,7 @@ MAX_AGE = "86400"
 def _is_auth_path(path: str) -> bool:
     """Check if path is an auth endpoint, normalizing to prevent traversal."""
     normalized = posixpath.normpath(path)
-    return normalized.startswith("/api/auth")
+    return normalized == "/api/auth" or normalized.startswith("/api/auth/")
 
 
 def preflight_headers(origin: str, path: str = "/") -> dict[str, str]:

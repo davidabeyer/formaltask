@@ -21,18 +21,9 @@ import pytest
 
 @pytest.fixture
 def in_memory_db():
-    """In-memory SQLite database with minimal schema for API tests."""
+    """In-memory SQLite database for readiness check tests."""
     conn = sqlite3.connect(":memory:")
-    conn.execute("CREATE TABLE epics (name TEXT PRIMARY KEY, description TEXT, created_at TEXT)")
-    conn.execute(
-        "CREATE TABLE tasks (id INTEGER PRIMARY KEY, epic_name TEXT, title TEXT, status TEXT, created_at TEXT)"
-    )
-    conn.execute(
-        "INSERT INTO epics (name, description, created_at) VALUES ('test', 'Test', '2026-01-01')"
-    )
-    conn.execute(
-        "INSERT INTO tasks (epic_name, title, status, created_at) VALUES ('test', 'Task 1', 'open', '2026-01-01')"
-    )
+    conn.execute("CREATE TABLE epics (name TEXT PRIMARY KEY)")
     conn.commit()
     yield conn
     conn.close()
@@ -93,42 +84,40 @@ class TestRequestValidation:
     """Tests for Pydantic request validation middleware."""
 
     def test_valid_task_creation_passes(self):
-        from formaltask.api.validation import validate_task_create
+        from formaltask.api.validation import TaskCreateRequest
 
-        data = {"epic_name": "test", "title": "New task", "description": "A task"}
-        result = validate_task_create(data)
+        result = TaskCreateRequest(epic_name="test", title="New task", description="A task")
         assert result.title == "New task"
 
     def test_missing_required_field_raises(self):
-        from formaltask.api.validation import validate_task_create
+        from formaltask.api.validation import TaskCreateRequest
 
         with pytest.raises(ValueError, match="title"):
-            validate_task_create({"epic_name": "test"})
+            TaskCreateRequest(epic_name="test")
 
     def test_empty_title_rejected(self):
-        from formaltask.api.validation import validate_task_create
+        from formaltask.api.validation import TaskCreateRequest
 
         with pytest.raises(ValueError, match="title"):
-            validate_task_create({"epic_name": "test", "title": ""})
+            TaskCreateRequest(epic_name="test", title="")
 
     def test_valid_task_update_passes(self):
-        from formaltask.api.validation import validate_task_update
+        from formaltask.api.validation import TaskUpdateRequest
 
-        data = {"status": "in_progress"}
-        result = validate_task_update(data)
+        result = TaskUpdateRequest(status="in_progress")
         assert result.status == "in_progress"
 
     def test_invalid_status_rejected(self):
-        from formaltask.api.validation import validate_task_update
+        from formaltask.api.validation import TaskUpdateRequest
 
         with pytest.raises(ValueError, match="status"):
-            validate_task_update({"status": "invalid_status"})
+            TaskUpdateRequest(status="invalid_status")
 
     def test_title_too_long_rejected(self):
-        from formaltask.api.validation import validate_task_create
+        from formaltask.api.validation import TaskCreateRequest
 
         with pytest.raises(ValueError, match="title"):
-            validate_task_create({"epic_name": "test", "title": "x" * 501})
+            TaskCreateRequest(epic_name="test", title="x" * 501)
 
 
 # ===========================================================================
@@ -177,7 +166,6 @@ class TestRateLimiting:
 
         limiter = RateLimiter(max_tokens=3, refill_rate=100.0)
         time.sleep(0.1)
-        # Even after waiting, should still only have max_tokens
         count = 0
         while limiter.allow("key-1"):
             count += 1
@@ -220,6 +208,12 @@ class TestCorsIntegration:
         headers = cors_headers("https://formaltask.com", path="/api/auth/login")
         assert headers["Access-Control-Allow-Credentials"] == "true"
 
+    def test_auth_prefix_does_not_match_unrelated_paths(self):
+        from formaltask.api.cors import cors_headers
+
+        headers = cors_headers("https://formaltask.com", path="/api/authorize")
+        assert "Access-Control-Allow-Credentials" not in headers
+
 
 # ===========================================================================
 # End-to-End: Full Request Lifecycle
@@ -240,13 +234,11 @@ class TestFullRequestLifecycle:
 
     def test_validated_request_with_rate_limit(self):
         from formaltask.api.rate_limit import RateLimiter
-        from formaltask.api.validation import validate_task_create
+        from formaltask.api.validation import TaskCreateRequest
 
         limiter = RateLimiter(max_tokens=10, refill_rate=1.0)
-        data = {"epic_name": "test", "title": "New task", "description": "Desc"}
-
         assert limiter.allow("api-key-1") is True
-        result = validate_task_create(data)
+        result = TaskCreateRequest(epic_name="test", title="New task", description="Desc")
         assert result.title == "New task"
 
     def test_rate_limited_request_blocked_before_validation(self):
@@ -254,9 +246,7 @@ class TestFullRequestLifecycle:
 
         limiter = RateLimiter(max_tokens=1, refill_rate=0.0)
         limiter.allow("api-key-1")
-
         assert limiter.allow("api-key-1") is False
-        # Validation never runs — rate limit checked first
 
     def test_ready_check_with_db_and_cors(self, in_memory_db):
         from formaltask.api.cors import cors_headers

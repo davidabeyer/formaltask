@@ -33,13 +33,3 @@ class TaskUpdateRequest(BaseModel):
         if v is not None and v not in VALID_STATUSES:
             raise ValueError(f"status must be one of {VALID_STATUSES}")
         return v
-
-
-def validate_task_create(data: dict) -> TaskCreateRequest:
-    """Validate task creation request data."""
-    return TaskCreateRequest(**data)
-
-
-def validate_task_update(data: dict) -> TaskUpdateRequest:
-    """Validate task update request data."""
-    return TaskUpdateRequest(**data)
