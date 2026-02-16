@@ -1,8 +1,12 @@
 """Tests for API documentation - OpenAPI spec and Swagger UI."""
 
-from fastapi.testclient import TestClient
+import pytest
 
-from formaltask.api.app import create_app
+fastapi = pytest.importorskip("fastapi", reason="fastapi not installed")
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from formaltask.api.app import create_app  # noqa: E402
 
 
 def _client():

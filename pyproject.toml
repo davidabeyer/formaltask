@@ -231,6 +231,7 @@ exclude = [
     "skills",
     ".hypothesis",
     ".claude",
+    "formaltask/api",  # Optional dependency (fastapi) - not always installed
     "tests",
 ]
 
