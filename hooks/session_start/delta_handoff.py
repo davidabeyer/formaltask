@@ -125,6 +125,12 @@ def generate_delta(ctx: dict) -> dict | None:
     }
     debug_path.write_text(json.dumps(debug_log, indent=2))
 
+    # Call LLM (requires OPENROUTER_API_KEY)
+    if not os.getenv("OPENROUTER_API_KEY"):
+        # Clean up snapshot so it doesn't trigger again
+        snapshot_path.unlink()
+        return None
+
     # Build LLM prompt
     user_content = f"## Pre-Compaction Transcript\n\n{transcript}"
 

@@ -72,7 +72,7 @@ fi
 
 # Check for required environment variables
 if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-    echo "Warning: OPENROUTER_API_KEY not set (required for LLM operations)"
+    echo "Note: OPENROUTER_API_KEY not set (optional — enables LLM-powered handoff generation)"
 fi
 
 echo ""

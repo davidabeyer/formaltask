@@ -25,9 +25,7 @@ UNIT_TESTS_DIR = TESTS_DIR / "unit"
 # Hooks subdirectories
 LIB_DIR = HOOKS_DIR / "lib"
 CLI_DIR = HOOKS_DIR / "cli"
-SESSION_END_DIR = (
-    HOOKS_DIR / "session_end"
-)  # Only doc_analyzer remains; main worker + deregister archived
+SESSION_END_DIR = HOOKS_DIR / "session_end"
 SESSION_START_DIR = HOOKS_DIR / "session_start"  # register_active_session archived
 USER_PROMPT_DIR = HOOKS_DIR / "user-prompt"
 # Note: PRE_COMPACT_DIR removed - hooks/pre-compact/ archived

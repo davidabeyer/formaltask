@@ -105,7 +105,16 @@ def generate_handoff(
     # Extract conversation (from marker or full transcript)
     conversation = handoff_transcript(transcript_path, start_line=start_line)
 
-    # Call LLM
+    # Call LLM (requires OPENROUTER_API_KEY)
+    if not os.getenv("OPENROUTER_API_KEY"):
+        logger.debug("No OPENROUTER_API_KEY — skipping LLM handoff, writing stub")
+        return write_stub_handoff(
+            thread_name,
+            transcript_path=str(transcript_path),
+            error="OPENROUTER_API_KEY not set",
+            handoff_dir=handoff_dir,
+        )
+
     try:
         client, model = get_openrouter_client(model=HANDOFF_MODEL)
 

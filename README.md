@@ -222,7 +222,7 @@ Claude Code settings are stored in `~/.claude/settings.json`. This file configur
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | Yes | LLM operations via OpenRouter |
+| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests and CLI | Database path resolution |
 
 ### Database

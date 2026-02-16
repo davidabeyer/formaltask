@@ -198,7 +198,7 @@ barrier = threading.Barrier(len(operations))
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | Yes | LLM operations (Gemini via OpenRouter) |
+| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests and CLI | Database path resolution |
 | `ANTHROPIC_API_KEY` | GitHub Actions | Doc-update workflow (repo secret) |
 

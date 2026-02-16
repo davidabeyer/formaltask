@@ -38,7 +38,6 @@ bats hooks/tests/  # BATS tests
 | SessionStart | Auto-index codebase | `session_start/auto_index_codebase.py` |
 | SessionStart | Delta handoff injection | `session_start/delta_handoff.py` |
 | SessionEnd | Session ends | `session_end/runner.py` → `session_end/phases/` |
-| SessionEnd | Doc analysis | `session_end/doc_analyzer_worker.py` |
 | UserPromptSubmit | User sends prompt | `promptsubmit/runner.py` → `promptsubmit/phases/` |
 | PreCompact | Before /compact | `pre_compact/` |
 
@@ -385,7 +384,7 @@ Escape hatches are verified in `hooks/tests/integration/test_escape_hatches.py`:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | Yes | All LLM operations (narrative, summary, verification, handoff via OpenRouter Gemini 2.5 Pro) |
+| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 | `USE_LEGACY_SESSION_END` | No | Set to 1/true/yes to use monolithic session_end_worker.py (default: decomposed modules) |
 

@@ -7,7 +7,6 @@ No phase_engine dependency - simple list + loop pattern.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -20,75 +19,6 @@ logger = logging.getLogger(__name__)
 _life_root = str(Path.home() / "life")
 if _life_root not in sys.path:
     sys.path.insert(0, _life_root)
-
-
-def run_doc_analyzer(ctx: dict) -> None:
-    """Analyze session commits for documentation updates.
-
-    Delegates to the existing doc_analyzer_worker logic
-    for backward compatibility. Handles graceful degradation when
-    the API key is not set.
-
-    Args:
-        ctx: Context dict with session_id, start_time, cwd fields
-    """
-    session_id = ctx.get("session_id")
-    if not session_id:
-        return
-
-    # Check for API key early (graceful degradation)
-    if not os.getenv("OPENROUTER_API_KEY"):
-        logger.debug("OPENROUTER_API_KEY not set, skipping doc analysis")
-        return
-
-    try:
-        # Import the worker logic
-        from hooks.session_end.doc_analyzer_worker import (
-            analyze_commits as _analyze_commits,
-        )
-        from hooks.session_end.doc_analyzer_worker import (
-            filter_documented_files,
-            get_openrouter_client,
-            get_session_commits,
-            load_analyzed_commits,
-            save_analyzed_commits,
-            write_pending,
-        )
-
-        # Get OpenRouter client
-        client, model = get_openrouter_client()
-        if client is None:
-            return
-
-        # Setup pending directory
-        project_root = os.getenv("PROJECT_ROOT", ctx.get("cwd", os.getcwd()))
-        pending_dir = Path(project_root) / ".claude" / "doc-guard"
-
-        # Get commits and filter to documented files
-        start_time = ctx.get("start_time")
-        commits = get_session_commits(start_time)
-
-        # Filter out already-analyzed commits
-        analyzed = load_analyzed_commits(pending_dir)
-        commits = [c for c in commits if c["hash"] not in analyzed]
-
-        if not commits:
-            return
-
-        documented_files = filter_documented_files(commits)
-        if not documented_files:
-            return
-
-        # Analyze commits
-        result = _analyze_commits(client, model, commits, documented_files)
-
-        if result and result.needs_update:
-            write_pending(result, session_id, pending_dir)
-            save_analyzed_commits(pending_dir, [c["hash"] for c in commits])
-
-    except Exception as e:
-        # Fire-and-forget: log but don't fail
-        logger.debug("Doc analysis error (non-fatal): %s", e)
 
 
 def run_skill_queue_flush(ctx: dict) -> None:
@@ -153,7 +83,6 @@ def close_active_skill_session(ctx: dict) -> None:
 
 # Ordered list of phases (for runner to iterate)
 PHASES = [
-    run_doc_analyzer,
     close_active_skill_session,
     run_skill_queue_flush,
     index_conversation,
@@ -161,7 +90,6 @@ PHASES = [
 ]
 
 __all__ = [
-    "run_doc_analyzer",
     "close_active_skill_session",
     "run_skill_queue_flush",
     "index_conversation",

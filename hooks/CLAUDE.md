@@ -21,7 +21,7 @@ hooks/
 | Hook | Trigger | Key Files |
 |------|---------|-----------|
 | SessionStart | Session begins | `session_start/phases/`, `task_context_loader.py` |
-| SessionEnd | Session ends | `session_end/phases/`, `doc_analyzer_worker.py` |
+| SessionEnd | Session ends | `session_end/phases/` |
 | SubagentStop | Subagent stops | `stop/phases/completion_enforcer.py` (review + completion) |
 | UserPromptSubmit | User sends prompt | `promptsubmit/phases/` |
 | PreToolUse | Before tool calls | `pretool/phases/` |
@@ -43,7 +43,7 @@ Phase execution order: `hooks/pretool/runner.py` PHASES list. First block wins.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | Yes | LLM operations via OpenRouter |
+| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 
 ## Common Gotchas

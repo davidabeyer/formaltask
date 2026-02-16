@@ -20,7 +20,10 @@ Located in `phases/` directory, registered in `phases/__init__.py`:
 
 | Phase | Purpose |
 |-------|---------|
-| `doc_analyzer.py` | Analyzes session commits for documentation updates |
+| `close_active_skill_session` | Completes open skill spans |
+| `run_skill_queue_flush` | Flushes pending skill queue |
+| `index_conversation` | Indexes conversation for search |
+| `vault_capture` | Captures knowledge to vault (requires OPENROUTER_API_KEY) |
 
 ### Phase Structure
 
@@ -42,13 +45,6 @@ Register in `phases/__init__.py`:
 ```python
 PHASES = [my_phase_fn, ...]
 ```
-
-## Legacy Files
-
-| File | Purpose |
-|------|---------|
-| `doc_analyzer_worker.py` | Core logic for documentation analysis (used by phase) |
-| `cleanup_orphans.py` | Cleans orphaned session data |
 
 ## Error Handling
 
