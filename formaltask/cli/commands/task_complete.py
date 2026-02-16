@@ -21,6 +21,7 @@ from formaltask.cli.output import OutputFormatter
 from formaltask.db.helpers import parse_depends_on
 from formaltask.tasks import get_task, get_tasks
 from formaltask.tasks.guards import GuardViolation
+from formaltask.workers.resume import resume_worker_in_tmux
 
 # Constant for commit lookback period in days
 LOOKBACK_DAYS = 30
@@ -247,6 +248,50 @@ def _chain_to_next(db_path: str, task_id: int) -> None:
         print("Chain complete")
 
 
+def _auto_unblock_reporter(completed_task_id: int, db_path: str) -> None:
+    """Auto-resume the reporter task when a blocker task completes.
+
+    If the completed task is a blocker (task_type=blocker) with a source_task_id,
+    and the source task is blocked_user, resume its worker in tmux.
+    """
+    task = get_task(db_path, completed_task_id)
+    if task is None:
+        return
+
+    metadata = task.get("metadata") or {}
+    if metadata.get("task_type") != "blocker":
+        return
+
+    source_task_id = metadata.get("source_task_id")
+    if not source_task_id:
+        return
+
+    source_task = get_task(db_path, source_task_id)
+    if source_task is None or source_task["status"] != "blocked_user":
+        return
+
+    response_msg = f"Blocker task #{completed_task_id} completed: {task['title']}"
+    try:
+        resume_worker_in_tmux(source_task_id, response_msg)
+        print(f"Auto-resumed task #{source_task_id} (blocker #{completed_task_id} completed)")
+    except Exception:
+        # Fallback: clear blocked state directly (we have db_path; _clear_blocked_state
+        # uses get_db_path() which may not resolve in all contexts)
+        from formaltask.db.connection import DatabaseConnection
+
+        try:
+            with DatabaseConnection(db_path, exclusive=True) as conn:
+                conn.execute(
+                    "UPDATE tasks SET status = 'in_progress', blocked_question = NULL "
+                    "WHERE id = ? AND status IN ('blocked_user', 'blocked')",
+                    (source_task_id,),
+                )
+        except Exception:
+            pass
+        print(f"Unblocked task #{source_task_id} but could not auto-resume tmux session.")
+        print(f"  Respawn manually: ft work spawn {source_task_id}")
+
+
 def _complete_task(
     task_id: int,
     db_path: str,
@@ -368,6 +413,9 @@ def _complete_task(
 
     # Update task status to completed via state machine (Task #1369)
     transition_task_status(db_path, task_id, "completed", head_commit_sha=head_sha)
+
+    # Auto-resume reporter if this was a blocker task
+    _auto_unblock_reporter(task_id, db_path)
 
     # Show newly-unblocked tasks after completion
     _show_unblocked_tasks_after_completion(task_id, db_path)

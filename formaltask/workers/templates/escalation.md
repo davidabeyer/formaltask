@@ -37,16 +37,20 @@ python3 -m formaltask.cli.pm blocked "Auth flow unclear - OAuth vs JWT decision 
 
 **Important:** Human will see blocked workers in `/inbox` and can resolve or provide guidance.
 
-## Report Infrastructure Problems (Without Blocking Yourself)
+## Report Infrastructure Problems
 
-If something is broken (CI, missing dep, shared config) but you can still work around it, report it instead of blocking:
+If something is broken (CI, missing dep, shared config):
 
+**Can work around it?** Report and continue:
 ```bash
 ft work report "Fix CI: pytest failures in test_auth after merge"
 ```
 
-This creates a blocker task for another worker to fix. You **continue working**. One open blocker per epic (dedup). Max 3 reports per task (rate limit).
+**Can't continue?** Report AND block — you'll auto-resume when the fix lands:
+```bash
+ft work report "Fix CI: pytest failures in test_auth after merge"
+ft work blocked "Waiting for CI fix to land"
+```
 
-**Use `ft work report` when:** CI broken on master, shared dependency missing, config issue affecting multiple workers.
-**Use `ft work blocked` when:** YOU are stuck and cannot continue.
+Creates a blocker task for another worker. One open blocker per epic (dedup). Max 3 reports per task.
 </escalation_protocol>
