@@ -67,10 +67,6 @@ agents = [
     "numpy>=1.24.0",
     "requests>=2.28.0",
 ]
-api = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
-]
 dayflow = [
     "httpx>=0.24.0",
 ]
@@ -84,7 +80,6 @@ all = [
     "formaltask[test]",
     "formaltask[dev]",
     "formaltask[agents]",
-    "formaltask[api]",
     "formaltask[dayflow]",
     "formaltask[mcp]",
 ]
@@ -231,7 +226,6 @@ exclude = [
     "skills",
     ".hypothesis",
     ".claude",
-    "formaltask/api",  # Optional dependency (fastapi) - not always installed
     "tests",
 ]
 
