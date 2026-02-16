@@ -3,7 +3,7 @@
 Task #1808: Core library implementation.
 Task #1809: Command documentation and integration.
 
-Provides functionality to resume workers using Claude's --continue flag.
+Provides functionality to resume workers using Claude's --resume flag.
 """
 
 import logging
@@ -154,7 +154,7 @@ def _clear_blocked_state(task_id: int) -> None:
 
 
 def resume_worker_in_tmux(task_id: int, response: str) -> str:
-    """Resume worker in a tmux session using Claude's --continue flag.
+    """Resume worker in a tmux session using Claude's --resume flag.
 
     Uses the same two-step spawn pattern as parallel_start.spawn_worker:
     1. Create tmux session with bash shell
@@ -224,18 +224,18 @@ def resume_worker_in_tmux(task_id: int, response: str) -> str:
         )
 
         # Step 2: Send claude resume command via send-keys
-        # Use --continue flag with session ID to auto-resume without picker
+        # Use --resume (NOT --continue) with session ID to resume specific session
+        # --continue is a boolean flag (resumes most recent), --resume takes session ID
         # Use --permission-mode bypassPermissions like spawn_worker
         # Prepend 'set +m' to disable bash job control
         # Append 'exec bash' to keep shell alive after Claude exits
-        # Prepend resume guidance: task list state is lost on --continue
         resume_msg = (
-            "RESUME CONTEXT: Your task list (TaskCreate/TaskList) was reset by session restart. "
-            "Do NOT recreate tasks from the previous session. Continue from where you left off.\n\n"
-            + response
+            f"HUMAN RESPONSE TO YOUR QUESTION: {response}\n\n"
+            "RESUME NOTE: Session was restarted. Your task list (TaskCreate/TaskList) was reset — "
+            "do NOT recreate tasks. Process the human response above and continue your work."
         )
         claude_cmd = (
-            f"set +m; claude --continue {shlex.quote(session_id)} "
+            f"set +m; claude --resume {shlex.quote(session_id)} "
             f"--permission-mode bypassPermissions "
             f"{shlex.quote(resume_msg)}; exec bash"
         )

@@ -25,6 +25,7 @@ from pathlib import Path
 from formaltask.paths import get_claude_home
 from formaltask.state.session import set_current_task
 from formaltask.tmux import create_session, is_pane_alive
+from formaltask.workers.resume import read_and_validate_session_id, verify_session_exists
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +131,20 @@ class SpawnError(Exception):
     """
 
 
+def _check_resumable_session(task_id: int, worktree_path: Path) -> str | None:
+    """Check if a previous Claude session can be resumed for this task.
+
+    Returns session_id if resumable, None otherwise. Never raises.
+    """
+    try:
+        session_id_file = worktree_path / ".task" / "session_id"
+        session_id = read_and_validate_session_id(session_id_file)
+        verify_session_exists(session_id, task_id, worktree_path)
+        return session_id
+    except Exception:
+        return None
+
+
 def validate_task_id(task_id):
     """Validate task_id to prevent path traversal and shell injection attacks."""
     task_id_str = str(task_id)
@@ -193,6 +208,7 @@ def spawn_tmux_session(
     worktree_path: str,
     session_id: str,
     project_root: str | None = None,
+    resume: bool = False,
 ) -> int:
     """Spawn tmux session with Claude Code and verify it's alive.
 
@@ -202,9 +218,10 @@ def spawn_tmux_session(
     Args:
         task_id: Task ID for session naming and logging.
         worktree_path: Working directory for the tmux session.
-        session_id: UUID for Claude --session-id flag.
+        session_id: UUID for Claude --session-id flag (or --resume if resume=True).
         project_root: Main repo path for PROJECT_ROOT env var. If None, detected
             via git rev-parse (Task #2586).
+        resume: If True, use --resume to resume existing session instead of --session-id.
 
     Returns:
         int: PID of the tmux pane process.
@@ -213,7 +230,6 @@ def spawn_tmux_session(
         SpawnError: If spawn fails after MAX_SPAWN_RETRIES attempts.
     """
     session_name = f"task-{task_id}"
-    prompt = f"#task:{task_id} - Implement following TDD workflow."
     logger = logging.getLogger(__name__)
     log_file = get_claude_home() / "worker_signals.log"
 
@@ -235,11 +251,24 @@ def spawn_tmux_session(
             # Send claude command
             # NOTE: No 'exec bash' fallback - let pane die if Claude crashes
             # so retry logic can detect failure via is_pane_alive()
-            claude_cmd = (
-                f"trap 'echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) SIGTERM task-{task_id}\" >> {shlex.quote(str(log_file))}' SIGTERM; "
-                f"set +m; claude --permission-mode bypassPermissions --session-id {shlex.quote(session_id)} "
-                f"{shlex.quote(prompt)}"
-            )
+            trap_cmd = f"trap 'echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) SIGTERM task-{task_id}\" >> {shlex.quote(str(log_file))}' SIGTERM"
+            if resume:
+                resume_msg = (
+                    "RESUME CONTEXT: Your task list (TaskCreate/TaskList) was reset by session restart. "
+                    "Do NOT recreate tasks from the previous session. Continue from where you left off."
+                )
+                claude_cmd = (
+                    f"{trap_cmd}; "
+                    f"set +m; claude --permission-mode bypassPermissions --resume {shlex.quote(session_id)} "
+                    f"{shlex.quote(resume_msg)}"
+                )
+            else:
+                prompt = f"#task:{task_id} - Implement following TDD workflow."
+                claude_cmd = (
+                    f"{trap_cmd}; "
+                    f"set +m; claude --permission-mode bypassPermissions --session-id {shlex.quote(session_id)} "
+                    f"{shlex.quote(prompt)}"
+                )
             subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, claude_cmd, "Enter"],
                 check=True,
@@ -548,17 +577,27 @@ def spawn_worker(
     main_repo = str(Path(db_path).parent.parent)
     (task_binding_dir / "project_root").write_text(main_repo)
 
-    # Task #1802: Generate session ID for Claude session tracking
-    session_id = str(uuid.uuid4())
-    (task_binding_dir / "session_id").write_text(session_id)
+    # Check if we can resume a previous Claude session (respawn case)
+    resumable_session_id = None
+    if not fresh:
+        resumable_session_id = _check_resumable_session(task_id, worktree_path)
+        if resumable_session_id:
+            logger.info("Resumable session found for task #%d: %s", task_id, resumable_session_id)
 
-    # Task #2655: Store session_id in tasks table for transcript retrieval
-    with DatabaseConnection(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE tasks SET session_id = ? WHERE id = ?",
-            (session_id, task_id),
-        )
+    if resumable_session_id:
+        session_id = resumable_session_id
+    else:
+        # Task #1802: Generate session ID for Claude session tracking
+        session_id = str(uuid.uuid4())
+        (task_binding_dir / "session_id").write_text(session_id)
+
+        # Task #2655: Store session_id in tasks table for transcript retrieval
+        with DatabaseConnection(db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE tasks SET session_id = ? WHERE id = ?",
+                (session_id, task_id),
+            )
 
     # Task #2428: Write target branch for SessionStart PR instructions
     target_branch = feature_branch if feature_branch else default_branch
@@ -596,7 +635,10 @@ def spawn_worker(
 
     # Task #2336: Use extracted spawn_tmux_session() helper for retry logic and cleanup
     # Pass main_repo to avoid redundant git rev-parse call (Task #2586 simplification)
-    pid = spawn_tmux_session(task_id, str(worktree_path), session_id, project_root=main_repo)
+    pid = spawn_tmux_session(
+        task_id, str(worktree_path), session_id,
+        project_root=main_repo, resume=bool(resumable_session_id),
+    )
 
     # Task #2494: Register worktree-to-task mapping for dashboard idle detection
     # Without this, get_transcript_mtime() returns None → age_seconds = inf → is_stale = True

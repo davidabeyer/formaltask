@@ -148,6 +148,7 @@ class WorkerDashboard(App):
         Binding("minus", "decrease_limit", "", show=False, priority=True),
         Binding("R", "restart", "Restart", priority=True),
         Binding("i", "toggle_inbox", "Inbox", key_display="i"),
+        Binding("f12", "noop", "Detach", key_display="F12"),
         Binding("q", "quit", "Quit"),
     ]
 
@@ -535,6 +536,9 @@ class WorkerDashboard(App):
         old = self.max_workers
         self.max_workers = old - 1
         self.notify(f"Workers: {old} \u2192 {self.max_workers}", title="Limit")
+
+    def action_noop(self) -> None:
+        """F12 hint in footer — actual detach is handled by tmux binding."""
 
     def action_toggle_inbox(self) -> None:
         if not self._blocked_workers:

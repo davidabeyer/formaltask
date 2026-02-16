@@ -216,6 +216,25 @@ class TaskList(Static):
                 self._separator_bottom.remove()
                 self._separator_bottom = None
 
+        # Reorder DOM children to match intended sort order.
+        # mount() appends and update_from_state() preserves position, so DOM
+        # order drifts when tasks transition between active/queued states.
+        if self._nodes:
+            desired_order = []
+            for row_data in task_rows:
+                if row_data.task_id in self._row_cache:
+                    desired_order.append(self._row_cache[row_data.task_id])
+            if self._separator is not None:
+                desired_order.append(self._separator)
+            for row_data in queued_rows:
+                if row_data.task_id in self._row_cache:
+                    desired_order.append(self._row_cache[row_data.task_id])
+            if self._separator_bottom is not None:
+                desired_order.append(self._separator_bottom)
+            for i, widget in enumerate(desired_order):
+                if widget in self._nodes:
+                    self.move_child(widget, before=i)
+
         self.update_selection(selected_id)
 
     def _state_to_row_data(self, task_id: int, state: dict[str, Any]) -> TaskRowData:

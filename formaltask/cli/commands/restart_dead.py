@@ -52,7 +52,7 @@ def _can_resume(task_id: int) -> bool:
 
 
 def _try_resume(task_id: int) -> bool:
-    """Try to resume worker with --continue. Returns True on success."""
+    """Try to resume worker with --resume. Returns True on success."""
     from formaltask.workers.resume import (
         WorkerResumeError,
         resume_worker_in_tmux,
@@ -94,7 +94,7 @@ def execute(db_path: str, args) -> int:
         # Try resume first if --resume flag and session_id exists
         if use_resume and _can_resume(task_id):
             if _try_resume(task_id):
-                print(f"  {CYAN}↺{NC} #{task_id} resumed (--continue)")
+                print(f"  {CYAN}↺{NC} #{task_id} resumed (--resume)")
                 logger.info("Resumed orphaned task-%d", task_id)
                 resumed += 1
                 continue

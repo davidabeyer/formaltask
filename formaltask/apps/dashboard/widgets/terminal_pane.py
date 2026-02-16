@@ -24,8 +24,18 @@ class TerminalPane(Static):
     ) -> None:
         """Update stored state and refresh display."""
         self._task_id = task_id
-        self._captured_content = captured_content
         self._blocked_count = blocked_count
+
+        # Trim to widget height, keeping the BOTTOM (most recent) lines.
+        # capture_pane grabs ~50 lines but widget may only display ~20.
+        # Static renders top-down, so without trimming we show stale content.
+        if captured_content:
+            visible = self.content_size.height if self.content_size.height > 0 else 20
+            lines = captured_content.split("\n")
+            if len(lines) > visible:
+                captured_content = "\n".join(lines[-visible:])
+
+        self._captured_content = captured_content
         self.update(self.render_content())
 
     def render_content(self) -> Text:
