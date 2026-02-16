@@ -119,6 +119,21 @@ This creates a **critique-gated** task — a task with self-critique baked in:
 
 The task inherits its epic from the spawning worker, carries provenance (`source_task_id`, `finding_ref`), and can be auto-spawned by the watch daemon.
 
+### Feature Branches
+
+By default, each worker branches from `origin/master`. For larger epics where multiple workers should share a common integration branch, set a feature branch on the epic:
+
+```bash
+ft epic update my-epic --feature-branch my-epic-branch
+```
+
+Once set, all workers spawned for that epic will:
+- **Branch from** the feature branch instead of master
+- **Create PRs targeting** the feature branch (enforced by a PreToolUse guard that blocks `gh pr create` with the wrong `--base`)
+- **Be blocked from pushing** directly to master (enforced by a pre-push hook)
+
+This keeps parallel workers isolated from master until the epic is ready to merge. When all tasks are complete, merge the feature branch to master as a single integration point.
+
 ### What Falls Out
 
 Because everything routes through rules and the database:
