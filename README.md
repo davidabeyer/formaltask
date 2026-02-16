@@ -163,6 +163,7 @@ Install additional features using pip extras:
 
 | Extra | Purpose |
 |-------|---------|
+| `llm` | LLM client libraries (openai, instructor) |
 | `tui` | Terminal user interface dashboard |
 | `test` | Testing dependencies (pytest, hypothesis) |
 | `dev` | Development tools (ruff, basedpyright) |
