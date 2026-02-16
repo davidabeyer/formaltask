@@ -9,6 +9,16 @@ def _client():
     return TestClient(create_app())
 
 
+def _schema():
+    return _client().get("/openapi.json").json()
+
+
+def _resolve_ref(schema, ref):
+    """Resolve a $ref like '#/components/schemas/Foo' to its schema dict."""
+    name = ref.split("/")[-1]
+    return schema.get("components", {}).get("schemas", {}).get(name, {})
+
+
 class TestSwaggerUI:
     """Swagger UI accessible at /docs."""
 
@@ -29,76 +39,64 @@ class TestOpenAPISchema:
         assert response.status_code == 200
 
     def test_openapi_has_info(self):
-        schema = _client().get("/openapi.json").json()
+        schema = _schema()
         assert schema["info"]["title"] == "FormalTask API"
         assert "version" in schema["info"]
 
     def test_openapi_has_paths(self):
-        schema = _client().get("/openapi.json").json()
+        schema = _schema()
         assert len(schema["paths"]) > 0
 
 
 class TestEndpointExamples:
     """All endpoints have request/response examples."""
 
-    def _schema(self):
-        return _client().get("/openapi.json").json()
+    def _has_example(self, schema, content_spec):
+        """Check if a content spec or its referenced schema has an example."""
+        if "example" in content_spec or "examples" in content_spec:
+            return True
+        ref = content_spec.get("schema", {}).get("$ref", "")
+        if ref:
+            resolved = _resolve_ref(schema, ref)
+            if "example" in resolved or "examples" in resolved:
+                return True
+        return False
 
     def test_every_endpoint_has_response_example(self):
-        schema = self._schema()
+        schema = _schema()
         missing = []
         for path, methods in schema["paths"].items():
             for method, details in methods.items():
-                if method in ("get", "post", "put", "delete"):
-                    responses = details.get("responses", {})
-                    has_example = False
-                    for _code, resp in responses.items():
-                        content = resp.get("content", {})
-                        for _media, media_spec in content.items():
-                            if "example" in media_spec or "examples" in media_spec:
-                                has_example = True
-                            # Check schema-level examples
-                            if "schema" in media_spec:
-                                ref = media_spec["schema"].get("$ref", "")
-                                if ref:
-                                    schema_name = ref.split("/")[-1]
-                                    schemas = schema.get("components", {}).get("schemas", {})
-                                    if schema_name in schemas:
-                                        s = schemas[schema_name]
-                                        if "example" in s or "examples" in s:
-                                            has_example = True
-                                        # Check json_schema_extra
-                                        if s.get("properties"):
-                                            has_example = True
-                    if not has_example:
-                        missing.append(f"{method.upper()} {path}")
+                if method not in ("get", "post", "put", "delete"):
+                    continue
+                has_example = False
+                for resp in details.get("responses", {}).values():
+                    for content_spec in resp.get("content", {}).values():
+                        if self._has_example(schema, content_spec):
+                            has_example = True
+                if not has_example:
+                    missing.append(f"{method.upper()} {path}")
         assert not missing, f"Endpoints missing response examples: {missing}"
 
     def test_post_endpoints_have_request_body_example(self):
-        schema = self._schema()
+        schema = _schema()
         missing = []
         for path, methods in schema["paths"].items():
             for method in ("post", "put"):
                 if method not in methods:
                     continue
-                details = methods[method]
-                body = details.get("requestBody", {})
-                content = body.get("content", {})
+                body = methods[method].get("requestBody", {})
                 has_example = False
-                for _media, media_spec in content.items():
-                    if "example" in media_spec or "examples" in media_spec:
+                for content_spec in body.get("content", {}).values():
+                    if self._has_example(schema, content_spec):
                         has_example = True
-                    if "schema" in media_spec:
-                        ref = media_spec["schema"].get("$ref", "")
-                        if ref:
-                            schema_name = ref.split("/")[-1]
-                            schemas = schema.get("components", {}).get("schemas", {})
-                            if schema_name in schemas:
-                                s = schemas[schema_name]
-                                if "example" in s or "examples" in s:
-                                    has_example = True
-                                if s.get("properties"):
-                                    has_example = True
                 if not has_example:
                     missing.append(f"{method.upper()} {path}")
         assert not missing, f"POST/PUT endpoints missing request examples: {missing}"
+
+    def test_example_check_catches_missing_examples(self):
+        """Verify the check actually fails when examples are missing."""
+        schema = _schema()
+        # HTTPValidationError should NOT have an example (it's auto-generated by FastAPI)
+        validation_schema = _resolve_ref(schema, "#/components/schemas/HTTPValidationError")
+        assert "example" not in validation_schema, "HTTPValidationError should not have example"
