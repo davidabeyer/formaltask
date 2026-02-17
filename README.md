@@ -8,7 +8,6 @@ Open source declarative orchestration for parallel Claude Code agents — define
 - **Auto-spawn fixer tasks when CI fails** — workers fix their own broken builds
 - **Nudge stuck workers after 30 minutes** — no silent failures
 - **Workers spawn new tasks mid-flight** — agents create agents when they find problems
-- **Wire outputs to inputs across dependencies** — Task 2 automatically gets Task 1's artifacts
 - **Block completion until reviews pass** — quality gates enforced, not suggested
 
 ![Dashboard](docs/assets/dashboard.png)
@@ -62,7 +61,7 @@ When `ft task complete` runs, the completion check evaluates: Did `required_revi
 
 ### The Rules Kernel
 
-Completion checks, orchestration, and prompt generation use the same type:
+One abstraction runs everything:
 
 ```python
 @dataclass
@@ -74,9 +73,15 @@ class Rule:
     name: str      # reason (literal or state key for dynamic lookup)
 ```
 
-The same evaluator answers: "Is this task done?" "Should we spawn a CI fixer?" "What prompt should this worker get?" First match wins.
+Five fields. That's it. The same structure decides:
+- **Is this task done?** → completion checks
+- **Should we spawn a CI fixer?** → orchestration
+- **What prompt should this worker get?** → prompt generation
+- **Should we block this tool call?** → safety guards
 
-The condition DSL supports `AND`, `OR`, `NOT`, comparisons (`==`, `!=`, `>`, `<`), dotted path resolution (`task.metadata.retries`), and bare truthy checks. No parentheses — flatten complex conditions into multiple rules.
+First match wins. Override anything by adding a higher-priority rule — per task, per epic, or globally. No subclassing, no config files, no special cases. Just rules.
+
+The condition DSL: `AND`, `OR`, `NOT`, comparisons, dotted paths (`task.metadata.retries`). Flatten complex logic into multiple rules instead of nesting.
 
 Three rule sets ship by default:
 
