@@ -1,6 +1,17 @@
 # FormalTask
 
-Structured task management for AI-assisted development workflows. Integrates with Claude Code to provide epic-based planning, parallel task execution, and automated review workflows.
+Open source declarative orchestration for parallel Claude Code agents — define quality gates in YAML, enforce them automatically.
+
+## What This Gets You
+
+- **Parallel workers in isolated git worktrees** — scale to 10 agents working simultaneously
+- **Auto-spawn fixer tasks when CI fails** — workers fix their own broken builds
+- **Nudge stuck workers after 30 minutes** — no silent failures
+- **Workers spawn new tasks mid-flight** — agents create agents when they find problems
+- **Wire outputs to inputs across dependencies** — Task 2 automatically gets Task 1's artifacts
+- **Block completion until reviews pass** — quality gates enforced, not suggested
+
+![Dashboard](docs/assets/dashboard.png)
 
 ## How It Works
 
@@ -12,27 +23,22 @@ You describe what you want. `/plan` explores the codebase and writes a plan. `/c
 
 The database is the coordination backbone — not just storage.
 
-### Plans Carry Their Revision History
+## Quick Start
 
-Critiques don't live in separate files — they're embedded in the plan:
-
-```yaml
-goals:
-  - id: "g-1"
-    current: "Users can log in with email/password"
-    history:
-      - version: "r1"
-        text: "Users can log in"
-        critique:
-          verdict: "FIX_AND_SHIP"
-          findings:
-            - priority: "P1"
-              finding: "Missing rate limiting"
-              action: "Add rate limiter"
-              resolution: "fixed"  # Set by /revise
+```bash
+pip install formaltask
 ```
 
-Each `/critique` round appends to `history`. When `/revise` addresses findings, it sets `resolution: fixed|rejected|deferred`. The plan carries its full revision history.
+```bash
+export OPENROUTER_API_KEY="<your-key>"
+ft setup        # Interactive wizard
+```
+
+The setup wizard initializes the database, registers Claude Code hooks, and verifies your configuration.
+
+---
+
+## Architecture
 
 ### Specs Are Contracts, Guards Enforce Them
 
@@ -68,11 +74,11 @@ class Rule:
     name: str      # reason (literal or state key for dynamic lookup)
 ```
 
-The kernel is ~60 LOC: `evaluate(condition, context) → bool`, `render(template, context) → str`, `apply_rules(rules, context)` where first match wins. The same evaluator answers: "Is this task done?" "Should we spawn a CI fixer?" "What prompt should this worker get?"
+The same evaluator answers: "Is this task done?" "Should we spawn a CI fixer?" "What prompt should this worker get?" First match wins.
 
 The condition DSL supports `AND`, `OR`, `NOT`, comparisons (`==`, `!=`, `>`, `<`), dotted path resolution (`task.metadata.retries`), and bare truthy checks. No parentheses — flatten complex conditions into multiple rules.
 
-22 builtin rules handle the standard completion lifecycle. Three rule sets ship by default:
+Three rule sets ship by default:
 
 | Rule set | Purpose |
 |----------|---------|
@@ -102,6 +108,28 @@ This lets individual tasks define their own completion policies without modifyin
 #### User Templates
 
 Worker prompt templates use the same kernel. Drop a Jinja2 file in `~/.claude/templates/` to override any bundled template — user templates take priority, with automatic fallback to bundled on parse errors.
+
+### Plans Carry Their Revision History
+
+Critiques don't live in separate files — they're embedded in the plan:
+
+```yaml
+goals:
+  - id: "g-1"
+    current: "Users can log in with email/password"
+    history:
+      - version: "r1"
+        text: "Users can log in"
+        critique:
+          verdict: "FIX_AND_SHIP"
+          findings:
+            - priority: "P1"
+              finding: "Missing rate limiting"
+              action: "Add rate limiter"
+              resolution: "fixed"  # Set by /revise
+```
+
+Each `/critique` round appends to `history`. When `/revise` addresses findings, it sets `resolution: fixed|rejected|deferred`. The plan carries its full revision history.
 
 ### Workers Create Their Own Tasks
 
@@ -134,180 +162,11 @@ Once set, all workers spawned for that epic will:
 
 This keeps parallel workers isolated from master until the epic is ready to merge. When all tasks are complete, merge the feature branch to master as a single integration point.
 
-### What Falls Out
+---
 
-Because everything routes through rules and the database:
-
-- Auto-spawn fixer tasks when CI fails
-- Nudge stuck workers after 30 minutes
-- Inject thorough-approach prompts for complex tasks
-- Wire outputs to inputs across task dependencies
-- Block completion until required reviews pass
-- Workers spawn new tasks mid-flight, with their own completion policies
-
-## Quick Start
-
-```bash
-pip install formaltask
-```
-
-After installation:
-
-1. Set the required environment variable:
-   ```bash
-   export OPENROUTER_API_KEY="<your-key-here>"
-   ```
-
-2. Run the setup wizard:
-   ```bash
-   ft setup        # Interactive mode
-   ft setup --yes  # Non-interactive (CI/scripts)
-   ```
-
-   The setup wizard initializes the database, registers Claude Code hooks, and verifies your configuration.
-
-## Prerequisites
-
-- **Python 3.11+** (required)
-- **Git** (for hooks and version control)
-- **tmux 3.2+** (optional, enables parallel worker features)
-
-### Optional Feature Groups
-
-Install additional features using pip extras:
-
-| Extra | Purpose |
-|-------|---------|
-| `llm` | LLM client libraries (openai, instructor) |
-| `tui` | Terminal user interface dashboard |
-| `test` | Testing dependencies (pytest, hypothesis) |
-| `dev` | Development tools (ruff, basedpyright) |
-| `agents` | Agent-related utilities |
-| `dayflow` | HTTP client utilities |
-| `mcp` | MCP server integration |
-| `all` | All optional dependencies |
-
-## Alternative Installation (Development)
-
-For development or contributing to FormalTask:
-
-```bash
-git clone https://github.com/davidabeyer/formaltask.git
-cd formaltask
-python3 -m venv venv && source venv/bin/activate
-./install.sh
-```
-
-### Manual pip Installation
-
-Install in development mode:
-
-```bash
-pip install -e .
-```
-
-With optional dependencies:
-
-```bash
-pip install -e ".[all]"
-```
-
-Or install specific extras:
-
-```bash
-pip install -e ".[tui,test]"
-```
-
-### Git Hooks
-
-The `./install.sh` script automatically configures git to use the project's tracked hooks. This enables:
-- Pre-commit validation (linting, TDD guard)
-- Pre-push task status enforcement
-- Pre-merge-commit task validation
-
-For manual installations, run: `git config core.hooksPath .githooks`
-
-## Configuration
-
-### Settings File
-
-Claude Code settings are stored in `~/.claude/settings.json`. This file configures hooks, permissions, and other Claude Code behaviors.
-
-### Environment Variables
-
-| Variable | Required | Purpose |
-|----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
-| `PROJECT_ROOT` | For tests and CLI | Database path resolution |
-
-### Database
-
-Task data is stored in `.claude/formaltask.db` (SQLite).
-
-## Usage
-
-### Command Line
-
-```bash
-ft --help                      # Show available commands
-ft work spawn <id>             # Spawn worker for a task
-ft work list                   # List spawnable tasks
-ft work watch                  # Monitor workers
-ft work watch --spawn          # Monitor + auto-spawn ready tasks
-ft work dashboard              # TUI dashboard
-ft work inbox                  # Show blocked workers awaiting input
-ft task list <epic>            # List tasks in an epic
-ft task show <id>              # Show task details
-ft task complete <id>          # Mark task as complete
-ft task cancel <id>            # Cancel a task
-ft epic list                   # List all epics
-ft epic health <epic>          # Check epic health
-ft setup                       # Run setup wizard
-ft doctor                      # Verify configuration
-```
-
-Or run as a Python module:
-
-```bash
-python3 -m formaltask.cli --help
-```
-
-### Project Structure
-
-```text
-formaltask/
-├── cli/                # CLI commands (ft <noun> <verb>)
-├── core/               # Completion checking, config
-├── data/               # Static data files
-├── db/                 # Database connection, migrations
-├── epics/              # Epic CRUD, YAML parsing
-├── git/                # Worktree management, PR queries
-├── hooks/              # Hook utilities (shared with hooks/)
-├── llm/                # LLM integration (OpenRouter)
-├── review/             # Review context, prompt building
-├── skills/             # Skill metadata, span tracking
-├── state/              # Findings, session tracking
-├── tasks/              # Task lifecycle, dependencies, guards
-├── validators/         # PreToolUse validators (TDD, doc-guard)
-├── vault/              # Knowledge storage
-├── workers/            # Worker spawning, monitoring
-├── apps/               # TUI applications (dashboard)
-└── utils/              # Shared utilities
-agents/                 # Subagent definitions
-hooks/                  # Hook entry points for Claude Code events
-tests/                  # Test suite
-.githooks/              # Tracked git hooks
-.claude/
-└── formaltask.db       # Task database (auto-created by ft setup)
-```
-
-See the [CLI Reference](docs/cli/index.md) for full command documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
-
-### Dashboard
+## Dashboard
 
 The interactive TUI dashboard (`ft work dashboard`) provides real-time monitoring and control of parallel workers.
-
-![Dashboard](docs/assets/dashboard.png)
 
 **Layout:** Status bar (top) showing task counts and auto-spawn state, task list (middle) with color-coded health indicators, terminal pane (bottom) showing the selected worker's output.
 
@@ -327,27 +186,104 @@ The interactive TUI dashboard (`ft work dashboard`) provides real-time monitorin
 | `i` | Open inbox (blocked workers awaiting input) |
 | `q` | Quit |
 
-**Auto-spawn** fills available worker slots from the task queue. The status bar shows the current limit (e.g. `auto (5)`). Adjust with `+`/`-` to scale up or down without leaving the dashboard. This is the interactive equivalent of `ft work watch --spawn`.
+**Auto-spawn** fills available worker slots from the task queue. The status bar shows the current limit (e.g. `auto (5)`). Adjust with `+`/`-` to scale up or down without leaving the dashboard.
+
+---
+
+## Prerequisites
+
+- **Python 3.11+** (required)
+- **Git** (for hooks and version control)
+- **tmux 3.2+** (optional, enables parallel worker features)
+
+### Optional Feature Groups
+
+Install additional features using pip extras:
+
+| Extra | Purpose |
+|-------|---------|
+| `llm` | LLM client libraries (openai, instructor) |
+| `tui` | Terminal user interface dashboard |
+| `test` | Testing dependencies (pytest, hypothesis) |
+| `dev` | Development tools (ruff, basedpyright) |
+| `agents` | Agent-related utilities |
+| `mcp` | MCP server integration |
+| `all` | All optional dependencies |
+
+## Development Installation
+
+```bash
+git clone https://github.com/davidabeyer/formaltask.git
+cd formaltask
+python3 -m venv venv && source venv/activate
+./install.sh
+```
+
+Or manually:
+
+```bash
+pip install -e ".[all]"
+git config core.hooksPath .githooks
+```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Required | Purpose |
+|----------|----------|---------|
+| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
+| `PROJECT_ROOT` | For tests | Database path resolution |
+
+### Database
+
+Task data is stored in `.claude/formaltask.db` (SQLite).
+
+## CLI Reference
+
+```bash
+ft work spawn <id>             # Spawn worker for a task
+ft work list                   # List spawnable tasks
+ft work watch --spawn          # Monitor + auto-spawn ready tasks
+ft work dashboard              # TUI dashboard
+ft work inbox                  # Show blocked workers awaiting input
+ft task list <epic>            # List tasks in an epic
+ft task show <id>              # Show task details
+ft task complete <id>          # Mark task as complete
+ft epic list                   # List all epics
+ft epic health <epic>          # Check epic health
+ft setup                       # Run setup wizard
+ft doctor                      # Verify configuration
+```
+
+See the [CLI Reference](docs/cli/index.md) for full documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
+
+## Project Structure
+
+```text
+formaltask/
+├── cli/                # CLI commands (ft <noun> <verb>)
+├── core/               # Completion checking, config
+├── db/                 # Database connection, migrations
+├── epics/              # Epic CRUD, YAML parsing
+├── git/                # Worktree management, PR queries
+├── tasks/              # Task lifecycle, dependencies, guards
+├── validators/         # PreToolUse validators (TDD, doc-guard)
+├── workers/            # Worker spawning, monitoring
+├── apps/               # TUI applications (dashboard)
+└── utils/              # Shared utilities
+agents/                 # Subagent definitions
+hooks/                  # Hook entry points for Claude Code events
+tests/                  # Test suite
+.githooks/              # Tracked git hooks
+```
 
 ## Development
 
-### Running Tests
-
 ```bash
-pytest tests/ --cov=formaltask
-```
-
-### Linting
-
-```bash
-ruff check formaltask/ --fix
-ruff format formaltask/
-```
-
-### Type Checking
-
-```bash
-basedpyright formaltask/
+pytest tests/ --cov=formaltask    # Tests
+ruff check formaltask/ --fix      # Lint
+basedpyright formaltask/          # Type check
 ```
 
 ## License
