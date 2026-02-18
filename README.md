@@ -1,5 +1,7 @@
 # FormalTask
 
+Note: If you have any issues, please let me know! Will try to fix. 
+
 Open source declarative orchestration for parallel Claude Code agents — define quality gates in YAML, enforce them automatically.
 
 ## What This Gets You
