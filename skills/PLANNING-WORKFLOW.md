@@ -187,7 +187,7 @@ Run `/plan-status` to see all projects and their current stage:
 # → User runs ft epic decompose
 
 # 7. Create tasks in DB
-ft epic decompose my-feature ~/projects/my-feature/.plans/my-feature-specs/
+ft epic decompose my-feature ~/projects/my-feature/plans/specs/
 # → Tasks created in FormalTask DB
 # → Ready to spawn workers
 ```

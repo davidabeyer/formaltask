@@ -1,6 +1,6 @@
 # FormalTask
 
-Note: If you have any issues, please let me know! Will try to fix. 
+Note: If you have any issues, please let me know! Will try to fix.
 
 Open source declarative orchestration for parallel Claude Code agents — define quality gates in YAML, enforce them automatically.
 
@@ -8,7 +8,7 @@ Open source declarative orchestration for parallel Claude Code agents — define
 
 - **Parallel workers in isolated git worktrees** — scale to 10 agents working simultaneously
 - **Auto-spawn fixer tasks when CI fails** — workers fix their own broken builds
-- **Nudge stuck workers after 30 minutes** — no silent failures
+- **Nudge stuck workers after 1 hour** — no silent failures
 - **Workers spawn new tasks mid-flight** — agents create agents when they find problems
 - **Block completion until reviews pass** — quality gates enforced, not suggested
 
@@ -23,6 +23,12 @@ ft setup        # Initialize database + register hooks
 
 That's it. `ft setup` creates `.claude/formaltask.db` and configures Claude Code hooks.
 
+## Prerequisites
+
+- **Python 3.11+** (required)
+- **Git** (for hooks and version control)
+- **tmux 3.2+** (optional, enables parallel worker features)
+
 ## Walkthrough
 
 ### 1. Create an epic
@@ -30,7 +36,7 @@ That's it. `ft setup` creates `.claude/formaltask.db` and configures Claude Code
 An epic is a container for related tasks:
 
 ```bash
-ft epic create auth-system
+ft epic create auth-system "User authentication system"
 ```
 
 ### 2. Add tasks
@@ -80,22 +86,6 @@ ft work spawn --epic auth-system
 
 FormalTask respects dependency chains — it only spawns tasks whose dependencies are complete.
 
-### Full Planning Cycle
-
-The walkthrough above uses `ft task add` for quick task creation. For larger projects, the planning cycle adds structured enforcement:
-
-```
-/plan → /critique → /revise → /decompose → ft epic decompose <name> <spec-dir>
-```
-
-Tasks created via `ft epic decompose` gain:
-- **Executable acceptance criteria** — commands that run at completion time
-- **Input/output wiring** — cross-task data handoff with auto-inferred dependencies
-- **Full spec as worker context** — the complete YAML spec stored for the worker to reference
-- **Structural validation** — quality checks before tasks enter the queue
-
-See [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the full lifecycle.
-
 ## How It Works
 
 ```
@@ -106,11 +96,70 @@ Plan → Critique → Specs → Tasks → Workers → Complete → Merge
 
 **Critique + Revise**: `/critique` identifies gaps and issues. `/revise` addresses findings. The plan carries its full revision history — each critique round appends to `history`, and revisions mark findings as `fixed|rejected|deferred`.
 
-**Specs + Tasks**: `/decompose` splits the plan into YAML specs with dependency tracking, acceptance criteria, and required reviews. `ft epic-decompose` commits tasks to SQLite.
+**Specs + Tasks**: `/decompose` splits the plan into YAML specs with dependency tracking, acceptance criteria, and required reviews. `ft epic decompose` commits tasks to SQLite with:
+- **Executable acceptance criteria** — commands that run at completion time
+- **Input/output wiring** — cross-task data handoff with auto-inferred dependencies
+- **Full spec as worker context** — the complete YAML spec stored for the worker to reference
+
+See [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the full lifecycle.
 
 **Workers**: `ft work spawn` launches parallel Claude workers in isolated git worktrees. Each worker gets its task assignment, quality gates, and review requirements injected automatically.
 
 **Complete + Merge**: Workers call `ft task complete` when done. The completion system evaluates: Did required reviews pass? Are acceptance criteria with `command:` fields passing? Guards enforce the spec as a contract.
+
+## CLI Reference
+
+```bash
+# Setup
+ft setup                                      # Setup wizard (also: ft init)
+ft doctor                                     # Verify configuration
+
+# Task management
+ft task add <epic> "Title" "Desc" --criteria "..."  # Add task to epic
+ft task list <epic>                           # List tasks in an epic
+ft task show <id>                             # Show task details
+ft task update <id> --title/--add-criteria/--depends-on  # Update task fields
+ft task complete <id>                         # Complete task (runs quality gates)
+ft task complete <id> --no-evidence           # Skip evidence guard (audit/doc tasks)
+ft task cancel <id> --reason "..."            # Cancel task (reason required)
+ft task defer <id> --reason "..."             # Defer task
+ft task create-from-finding FILE LINE --title "..."  # New task from review finding
+
+# Epic management
+ft epic create <name> "Description"           # Create epic (description required)
+ft epic list                                  # List all epics
+ft epic close <name>                          # Archive epic
+ft epic close <name> --force                  # Archive with incomplete tasks
+ft epic decompose <name> <spec-dir>           # Create tasks from spec YAMLs
+ft epic decompose <name> <spec-dir> --force   # Re-decompose (deletes existing tasks)
+ft epic decompose <name> <spec-dir> --validate  # Validate only, don't create tasks
+ft epic update <name> --feature-branch <branch>  # Set feature branch
+ft epic review <name>                         # Check merge readiness
+ft epic health <name>                         # Check dependency health
+
+# Reviews
+ft review store '<json>'                      # Store review packet
+ft review disposition FILE LINE --reason "R"  # Disposition a finding
+
+# Git integration
+ft commit-scan --task-id <id>                 # Scan commits for task evidence
+ft commit-link <task-id> <hash>               # Manually link commit to task
+
+# Worker management
+ft work spawn <id>                            # Spawn single worker
+ft work spawn --epic <name>                   # Spawn all ready tasks
+ft work list                                  # List spawnable tasks
+ft work watch --spawn                         # Monitor + auto-spawn
+ft work dashboard                             # TUI dashboard
+ft work inbox                                 # Show blocked workers
+ft work resume <id> [--epic <name>] [-m "msg"]  # Resume existing session
+ft work restart [--dry-run] [--resume]        # Restart orphaned workers
+
+# Templates
+ft formula list/cook/batch                    # Template management
+```
+
+See the [CLI Reference](docs/cli/index.md) for full documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
 
 ## Dashboard
 
@@ -280,12 +329,6 @@ export OPENROUTER_API_KEY="<your-key>"
 
 Core operations (`ft epic create`, `ft task add`, `ft work spawn`, `ft task complete`, `ft work dashboard`) work without it.
 
-## Prerequisites
-
-- **Python 3.11+** (required)
-- **Git** (for hooks and version control)
-- **tmux 3.2+** (optional, enables parallel worker features)
-
 ### Optional Feature Groups
 
 Install additional features using pip extras:
@@ -300,22 +343,6 @@ Install additional features using pip extras:
 | `mcp` | MCP server integration |
 | `all` | All optional dependencies |
 
-## Development Installation
-
-```bash
-git clone https://github.com/davidabeyer/formaltask.git
-cd formaltask
-python3 -m venv venv && source venv/activate
-./install.sh
-```
-
-Or manually:
-
-```bash
-pip install -e ".[all]"
-git config core.hooksPath .githooks
-```
-
 ## Configuration
 
 ### Environment Variables
@@ -329,56 +356,29 @@ git config core.hooksPath .githooks
 
 Task data is stored in `.claude/formaltask.db` (SQLite).
 
-## CLI Reference
+## Development Installation
 
 ```bash
-# Setup
-ft setup                                      # Setup wizard (also: ft init)
-ft doctor                                     # Verify configuration
-
-# Task management
-ft task add <epic> "Title" "Desc" --criteria "..."  # Add task to epic
-ft task list <epic>                           # List tasks in an epic
-ft task show <id>                             # Show task details
-ft task update <id> --title/--add-criteria/--depends-on  # Update task fields
-ft task complete <id>                         # Complete task (runs quality gates)
-ft task complete <id> --no-evidence           # Skip evidence guard (audit/doc tasks)
-ft task cancel <id> --reason "..."            # Cancel task (reason required)
-ft task defer <id> --reason "..."             # Defer task
-ft task create-from-finding FILE LINE --title "..."  # New task from review finding
-
-# Epic management
-ft epic create <name>                         # Create epic
-ft epic list                                  # List all epics
-ft epic close <name>                          # Archive epic
-ft epic decompose <name> <spec-dir>           # Create tasks from spec YAMLs
-ft epic update <name> --feature-branch <branch>  # Set feature branch
-ft epic review <name>                         # Check merge readiness
-ft epic health <name>                         # Check dependency health
-
-# Reviews
-ft review store '<json>'                      # Store review packet
-ft review disposition FILE LINE --reason "R"  # Disposition a finding
-
-# Git integration
-ft commit-scan --task-id <id>                 # Scan commits for task evidence
-ft commit-link <task-id> <hash>               # Manually link commit to task
-
-# Worker management
-ft work spawn <id>                            # Spawn single worker
-ft work spawn --epic <name>                   # Spawn all ready tasks
-ft work list                                  # List spawnable tasks
-ft work watch --spawn                         # Monitor + auto-spawn
-ft work dashboard                             # TUI dashboard
-ft work inbox                                 # Show blocked workers
-ft work resume <id>                           # Resume existing session
-ft work restart                               # Restart orphaned workers
-
-# Templates
-ft formula list/cook/batch                    # Template management
+git clone https://github.com/davidabeyer/formaltask.git
+cd formaltask
+python3 -m venv venv && source venv/bin/activate
+./install.sh
 ```
 
-See the [CLI Reference](docs/cli/index.md) for full documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
+Or manually:
+
+```bash
+pip install -e ".[all]"
+git config core.hooksPath .githooks
+```
+
+## Development
+
+```bash
+pytest tests/ --cov=formaltask    # Tests
+ruff check formaltask/ --fix      # Lint
+basedpyright formaltask/          # Type check
+```
 
 ## Project Structure
 
@@ -398,14 +398,6 @@ agents/                 # Subagent definitions
 hooks/                  # Hook entry points for Claude Code events
 tests/                  # Test suite
 .githooks/              # Tracked git hooks
-```
-
-## Development
-
-```bash
-pytest tests/ --cov=formaltask    # Tests
-ruff check formaltask/ --fix      # Lint
-basedpyright formaltask/          # Type check
 ```
 
 ## License

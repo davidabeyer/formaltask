@@ -33,6 +33,8 @@ formaltask/              # Repository root
 │   ├── session_start/  # SessionStart hooks
 │   ├── session_end/    # SessionEnd hooks
 │   ├── promptsubmit/   # UserPromptSubmit hooks
+│   ├── stop/           # SubagentStop hooks (completion enforcement)
+│   ├── subagent_start/ # SubagentStart hooks (review-store injection)
 │   └── tests/          # Hook-specific tests
 ├── tests/              # Main pytest test suite
 ├── .githooks/          # Tracked git hooks (see .githooks/README.md)
