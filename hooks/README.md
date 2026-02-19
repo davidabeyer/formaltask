@@ -384,7 +384,6 @@ Escape hatches are verified in `hooks/tests/integration/test_escape_hatches.py`:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 | `USE_LEGACY_SESSION_END` | No | Set to 1/true/yes to use monolithic session_end_worker.py (default: decomposed modules) |
 
@@ -624,7 +623,7 @@ def update_symlink(self, path: Path, target: Path) -> None:
 Wrap external LLM APIs with consistent error handling and lazy initialization:
 
 ```python
-# session_end/llm_client.py - OpenRouter integration
+# session_end/llm_client.py - LLM API integration
 class LLMClient:
     def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
         self.api_key = api_key

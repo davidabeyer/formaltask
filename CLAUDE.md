@@ -17,7 +17,7 @@ formaltask/              # Repository root
 │   ├── db/             # Database connection, migrations
 │   ├── epics/          # Epic CRUD, YAML parsing
 │   ├── git/            # Worktree management, PR queries
-│   ├── llm/            # LLM integration (OpenRouter)
+│   ├── llm/            # LLM utilities (MCP cleanup)
 │   ├── review/         # Review context, prompt building
 │   ├── state/          # Findings, session tracking
 │   ├── tasks/          # Task lifecycle, dependencies, guards
@@ -200,7 +200,6 @@ barrier = threading.Barrier(len(operations))
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered review self-critique and vault summarization. Not required for core task management |
 | `PROJECT_ROOT` | For tests and CLI | Database path resolution |
 | `ANTHROPIC_API_KEY` | GitHub Actions | Doc-update workflow (repo secret) |
 

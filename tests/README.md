@@ -154,7 +154,7 @@ def test_epic_operations(db_path, mock_gh_cli):
 - `conftest.py`: Reduced from 758 to 149 lines (80% reduction); core autouse fixtures remain
 - **Completed extractions**:
   - `fixtures/database.py`: Database fixtures (db_path, repo, db_with_epic_and_tasks) - Task #1652
-  - `fixtures/mocks.py`: Mock fixtures (mock_gh_cli, mock_openrouter_client, etc.) - Task #1653
+  - `fixtures/mocks.py`: Mock fixtures (mock_gh_cli, mock_subprocess, etc.) - Task #1653
   - `fixtures/accumulated_context.py`: V1/V2 context, corrupt files - Task #1654
   - `fixtures/worktree.py`: Session directory, worktree root - Task #1655
   - `fixtures/connection_tracking.py`: Connection leak detection - Task #1656

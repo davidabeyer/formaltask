@@ -23,7 +23,6 @@ Located in `phases/` directory, registered in `phases/__init__.py`:
 | `close_active_skill_session` | Completes open skill spans |
 | `run_skill_queue_flush` | Flushes pending skill queue |
 | `index_conversation` | Indexes conversation for search |
-| `vault_capture` | Captures knowledge to vault (requires OPENROUTER_API_KEY) |
 
 ### Phase Structure
 

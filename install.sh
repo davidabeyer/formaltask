@@ -70,11 +70,6 @@ else
     echo "Warning: .githooks directory not found, skipping hooks setup"
 fi
 
-# Check for required environment variables
-if [[ -z "${OPENROUTER_API_KEY:-}" ]]; then
-    echo "Note: OPENROUTER_API_KEY not set (optional — enables LLM-powered handoff generation)"
-fi
-
 echo ""
 echo "=== Running ft setup ==="
 ft setup --yes

@@ -42,10 +42,6 @@ formaltask = "formaltask.cli.__main__:main"
 ft = "formaltask.cli.__main__:main"
 
 [project.optional-dependencies]
-llm = [
-    "openai>=1.0.0",
-    "instructor>=1.0.0",
-]
 tui = [
     "textual>=0.47.0",
     "cachetools>=5.3.0",
@@ -75,7 +71,6 @@ mcp = [
     "mcp>=0.1.0",
 ]
 all = [
-    "formaltask[llm]",
     "formaltask[tui]",
     "formaltask[test]",
     "formaltask[dev]",

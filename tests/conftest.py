@@ -2,7 +2,7 @@
 
 Modular Fixtures (loaded via pytest_plugins):
 - fixtures/database.py: Database fixtures (db_path, session_db, etc.)
-- fixtures/mocks.py: Mock fixtures (mock_gh_cli, mock_openrouter_client, etc.)
+- fixtures/mocks.py: Mock fixtures (mock_gh_cli, mock_subprocess, etc.)
 
 Testing Guidelines:
 - NEVER call real external services (MCP, GitHub, file system)

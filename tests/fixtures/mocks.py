@@ -7,9 +7,6 @@ Fixtures provided:
 - mock_gh_cli: Mocks GitHub CLI subprocess calls (success)
 - mock_gh_cli_failure: Mocks GitHub CLI subprocess calls (failure)
 - skip_sqlite: Skip SQLite operations, fall back to JSON storage
-
-Note: OpenRouter client fixtures were removed when session-end workers
-were archived (see archive/session-end-worker/).
 """
 
 import subprocess

@@ -4,6 +4,11 @@ Note: If you have any issues, please let me know! Will try to fix.
 
 Open source declarative orchestration for parallel Claude Code agents — define quality gates in YAML, enforce them automatically.
 
+FormalTask is a **hook system for [Claude Code](https://docs.anthropic.com/en/docs/claude-code)**.
+It adds task orchestration, parallel workers, dependency tracking, and quality gates
+to your AI coding workflow. FormalTask doesn't replace Claude Code — it runs *inside*
+Claude Code sessions via hooks, enforcing completion rules and managing parallel work.
+
 ## What This Gets You
 
 - **Parallel workers in isolated git worktrees** — scale to 10 agents working simultaneously
@@ -25,9 +30,13 @@ That's it. `ft setup` creates `.claude/formaltask.db` and configures Claude Code
 
 ## Prerequisites
 
-- **Python 3.11+** (required)
-- **Git** (for hooks and version control)
-- **tmux 3.2+** (optional, enables parallel worker features)
+- **[Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code)** — FormalTask runs inside Claude Code via hooks
+- **Python 3.11+**
+- **Git** (for worktrees and hooks)
+- **tmux 3.2+** (optional — enables parallel workers in isolated sessions)
+
+Claude Code must be installed and run at least once (creates `~/.claude/settings.json`
+which `ft setup` needs to register hooks).
 
 ## Walkthrough
 
@@ -86,6 +95,23 @@ ft work spawn --epic auth-system
 
 FormalTask respects dependency chains — it only spawns tasks whose dependencies are complete.
 
+### Planning workflow (recommended for larger projects)
+
+For structured task creation with quality enforcement:
+
+```bash
+/plan auth-system                     # Claude explores codebase, writes plan
+/critique auth-system                 # Review plan → APPROVED / FIX_AND_SHIP / REVISE
+/decompose auth-system                # Generate task specs from approved plan
+ft epic decompose auth-system specs/  # Create tasks in database from specs
+ft work spawn --epic auth-system      # Spawn workers for all ready tasks
+ft work dashboard                     # Monitor everything
+```
+
+Tasks created via `ft epic decompose` include executable acceptance criteria,
+cross-task dependency wiring, and the full spec as worker context.
+See [Planning Workflow](skills/PLANNING-WORKFLOW.md) for details.
+
 ## How It Works
 
 ```
@@ -106,6 +132,18 @@ See [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the full lifecycle.
 **Workers**: `ft work spawn` launches parallel Claude workers in isolated git worktrees. Each worker gets its task assignment, quality gates, and review requirements injected automatically.
 
 **Complete + Merge**: Workers call `ft task complete` when done. The completion system evaluates: Did required reviews pass? Are acceptance criteria with `command:` fields passing? Guards enforce the spec as a contract.
+
+### Hook Execution Model
+
+FormalTask hooks into Claude Code's lifecycle events:
+
+- **SessionStart** — loads task context (spec, quality standards, review requirements) into the worker
+- **PreToolUse** — validators block dangerous operations (SQL injection, wrong PR base, unsafe file writes, etc.)
+- **SubagentStop** — completion enforcement: checks if the task actually meets its gates before allowing the worker to stop
+
+When a worker calls `ft task complete`, the rules engine evaluates 24 builtin completion
+rules: Did required reviews pass? Are acceptance criteria commands passing? Is the PR
+merged? First blocking rule wins — the task stays open until all gates clear.
 
 ## CLI Reference
 
@@ -237,7 +275,7 @@ Three rule sets ship by default:
 
 | Rule set | Purpose |
 |----------|---------|
-| `BUILTIN_RULES` | 22 completion rules (review gates, PR checks, docs, acceptance criteria) |
+| `BUILTIN_RULES` | 24 completion rules (review gates, PR checks, docs, acceptance criteria) |
 | `ORCHESTRATION_RULES` | Watch daemon triggers (e.g., alert after 1 hour) |
 | `TOOL_REDIRECT_RULES` | Block/redirect tool usage |
 
@@ -319,23 +357,12 @@ This keeps parallel workers isolated from master until the epic is ready to merg
 
 ---
 
-## Optional: LLM Features
-
-Some features use an LLM via OpenRouter for review self-critique and vault summarization. These are not required for core task management.
-
-```bash
-export OPENROUTER_API_KEY="<your-key>"
-```
-
-Core operations (`ft epic create`, `ft task add`, `ft work spawn`, `ft task complete`, `ft work dashboard`) work without it.
-
-### Optional Feature Groups
+## Optional Feature Groups
 
 Install additional features using pip extras:
 
 | Extra | Purpose |
 |-------|---------|
-| `llm` | LLM client libraries (openai, instructor) |
 | `tui` | Terminal user interface dashboard |
 | `test` | Testing dependencies (pytest, hypothesis) |
 | `dev` | Development tools (ruff, basedpyright) |
@@ -349,12 +376,44 @@ Install additional features using pip extras:
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered review self-critique and vault summarization. Not required for core task management |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 
 ### Database
 
 Task data is stored in `.claude/formaltask.db` (SQLite).
+
+## Troubleshooting
+
+### `ft setup` fails with "settings.json not found"
+
+Claude Code hasn't been run yet. Run `claude` once in any directory to create
+`~/.claude/settings.json`, then retry `ft setup`.
+
+### "formaltask.db not found" on other commands
+
+`ft setup` creates the database. If you skipped it and went straight to
+`ft epic create` or similar, run `ft setup` first:
+
+```bash
+cd your-project
+ft setup
+```
+
+### Worker stuck in HELP state
+
+```bash
+ft work inbox          # See what the worker is asking
+ft work resume <id> -m "Use approach X"   # Answer and resume
+```
+
+### Task completion blocked
+
+```bash
+ft task show <id>      # See which gate is blocking
+```
+
+Common blockers: unresolved P0/P1 review findings, failing acceptance criteria commands,
+stale review (code changed after review). Fix the issue, then `ft task complete <id>` again.
 
 ## Development Installation
 

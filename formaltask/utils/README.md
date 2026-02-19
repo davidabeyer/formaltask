@@ -75,7 +75,7 @@ env = build_subprocess_env()
 # Add specific variables
 env = build_subprocess_env(
     additional_vars={"API_KEY": "secret"},  # pragma: allowlist secret
-    extra_whitelist=["OPENROUTER_API_KEY"]
+    extra_whitelist=["ANTHROPIC_API_KEY"]
 )
 
 subprocess.run(["command"], env=env)

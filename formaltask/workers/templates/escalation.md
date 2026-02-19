@@ -30,7 +30,6 @@ python3 -m formaltask.cli.pm blocked "<brief description of what's blocking you>
 
 **Examples:**
 ```bash
-python3 -m formaltask.cli.pm blocked "Need OPENROUTER_API_KEY to test LLM integration"
 python3 -m formaltask.cli.pm blocked "pm_dashboard.py deleted in Task #2322 - need guidance on new architecture"
 python3 -m formaltask.cli.pm blocked "Auth flow unclear - OAuth vs JWT decision needed"
 ```
