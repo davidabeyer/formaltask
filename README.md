@@ -14,28 +14,111 @@ Open source declarative orchestration for parallel Claude Code agents — define
 
 ![Dashboard](docs/assets/dashboard.png)
 
+## Quick Start
+
+```bash
+pip install formaltask
+ft setup        # Initialize database + register hooks
+```
+
+That's it. `ft setup` creates `.claude/formaltask.db` and configures Claude Code hooks.
+
+## Walkthrough
+
+### 1. Create an epic
+
+An epic is a container for related tasks:
+
+```bash
+ft epic create auth-system
+```
+
+### 2. Add tasks
+
+```bash
+ft task add auth-system "Add login endpoint" \
+    "JWT-based POST /auth/login endpoint" \
+    --criteria "Returns 200 with valid credentials" \
+    --criteria "Returns 401 with invalid credentials"
+
+ft task add auth-system "Add logout endpoint" \
+    "Clear JWT cookie on POST /auth/logout" \
+    --criteria "Returns 200 and clears auth cookie"
+```
+
+Check your tasks:
+
+```bash
+ft task list auth-system
+```
+
+### 3. Spawn a worker
+
+A worker is a Claude Code session running in an isolated git worktree:
+
+```bash
+ft work spawn 1    # Spawn worker for task #1
+```
+
+This creates a worktree branch, starts a tmux session, and injects the task assignment into the Claude Code session.
+
+### 4. Monitor and complete
+
+```bash
+ft work list               # Quick status check
+ft work inbox              # See workers waiting for human input
+ft work dashboard          # Interactive TUI dashboard
+```
+
+Workers call `ft task complete <id>` themselves when done. The completion system checks quality gates (reviews, acceptance criteria) before marking it complete.
+
+### 5. Spawn all ready tasks at once
+
+```bash
+ft work spawn --epic auth-system
+```
+
+FormalTask respects dependency chains — it only spawns tasks whose dependencies are complete.
+
 ## How It Works
 
 ```
 Plan → Critique → Specs → Tasks → Workers → Complete → Merge
 ```
 
-You describe what you want. `/plan` explores the codebase and writes a plan. `/critique` pokes holes. `/decompose` splits it into YAML specs. `ft epic-decompose` commits tasks to SQLite with dependency tracking. `ft work spawn` launches parallel Claude workers in isolated git worktrees.
+**Plan**: `/plan` explores the codebase and writes a structured plan with goals, requirements, and risks.
 
-The database is the coordination backbone — not just storage.
+**Critique + Revise**: `/critique` identifies gaps and issues. `/revise` addresses findings. The plan carries its full revision history — each critique round appends to `history`, and revisions mark findings as `fixed|rejected|deferred`.
 
-## Quick Start
+**Specs + Tasks**: `/decompose` splits the plan into YAML specs with dependency tracking, acceptance criteria, and required reviews. `ft epic-decompose` commits tasks to SQLite.
 
-```bash
-pip install formaltask
-```
+**Workers**: `ft work spawn` launches parallel Claude workers in isolated git worktrees. Each worker gets its task assignment, quality gates, and review requirements injected automatically.
 
-```bash
-export OPENROUTER_API_KEY="<your-key>"
-ft setup        # Interactive wizard
-```
+**Complete + Merge**: Workers call `ft task complete` when done. The completion system evaluates: Did required reviews pass? Are acceptance criteria with `command:` fields passing? Guards enforce the spec as a contract.
 
-The setup wizard initializes the database, registers Claude Code hooks, and verifies your configuration.
+## Dashboard
+
+The interactive TUI dashboard (`ft work dashboard`) provides real-time monitoring and control of parallel workers.
+
+**Layout:** Status bar (top) showing task counts and auto-spawn state, task list (middle) with color-coded health indicators, terminal pane (bottom) showing the selected worker's output.
+
+**Worker states:** Each task shows a health indicator — **LIVE** (running), **EXIT** (process ended), **HELP** (needs human input), **FIX** (has review findings), or **queued** (ready to spawn).
+
+**Keybindings:**
+
+| Key | Action |
+|-----|--------|
+| `j` / `k` | Navigate task list |
+| `Enter` | Attach to selected worker (F12 to detach back) |
+| `S` | Spawn next queued task |
+| `A` | Toggle auto-spawn (automatically fills worker slots) |
+| `+` / `-` | Adjust max worker limit (1-10) |
+| `X` | Kill selected worker (double-tap to confirm) |
+| `R` | Restart selected worker (double-tap to confirm) |
+| `i` | Open inbox (blocked workers awaiting input) |
+| `q` | Quit |
+
+**Auto-spawn** fills available worker slots from the task queue. The status bar shows the current limit (e.g. `auto (5)`). Adjust with `+`/`-` to scale up or down without leaving the dashboard.
 
 ---
 
@@ -91,7 +174,7 @@ Three rule sets ship by default:
 |----------|---------|
 | `BUILTIN_RULES` | 22 completion rules (review gates, PR checks, docs, acceptance criteria) |
 | `ORCHESTRATION_RULES` | Watch daemon triggers (e.g., alert after 1 hour) |
-| `TOOL_REDIRECT_RULES` | Block/redirect tool usage (e.g., WebSearch → exa) |
+| `TOOL_REDIRECT_RULES` | Block/redirect tool usage |
 
 #### Custom Rules Per Task
 
@@ -171,31 +254,15 @@ This keeps parallel workers isolated from master until the epic is ready to merg
 
 ---
 
-## Dashboard
+## Optional: LLM Features
 
-The interactive TUI dashboard (`ft work dashboard`) provides real-time monitoring and control of parallel workers.
+Some features use an LLM via OpenRouter for review self-critique and vault summarization. These are not required for core task management.
 
-**Layout:** Status bar (top) showing task counts and auto-spawn state, task list (middle) with color-coded health indicators, terminal pane (bottom) showing the selected worker's output.
+```bash
+export OPENROUTER_API_KEY="<your-key>"
+```
 
-**Worker states:** Each task shows a health indicator — **LIVE** (running), **EXIT** (process ended), **HELP** (needs human input), **FIX** (has review findings), or **queued** (ready to spawn).
-
-**Keybindings:**
-
-| Key | Action |
-|-----|--------|
-| `j` / `k` | Navigate task list |
-| `Enter` | Attach to selected worker (F12 to detach back) |
-| `S` | Spawn next queued task |
-| `A` | Toggle auto-spawn (automatically fills worker slots) |
-| `+` / `-` | Adjust max worker limit (1-10) |
-| `X` | Kill selected worker (double-tap to confirm) |
-| `R` | Restart selected worker (double-tap to confirm) |
-| `i` | Open inbox (blocked workers awaiting input) |
-| `q` | Quit |
-
-**Auto-spawn** fills available worker slots from the task queue. The status bar shows the current limit (e.g. `auto (5)`). Adjust with `+`/`-` to scale up or down without leaving the dashboard.
-
----
+Core operations (`ft epic create`, `ft task add`, `ft work spawn`, `ft task complete`, `ft work dashboard`) work without it.
 
 ## Prerequisites
 
@@ -239,7 +306,7 @@ git config core.hooksPath .githooks
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
+| `OPENROUTER_API_KEY` | No | LLM-powered review self-critique and vault summarization. Not required for core task management |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 
 ### Database
@@ -249,7 +316,10 @@ Task data is stored in `.claude/formaltask.db` (SQLite).
 ## CLI Reference
 
 ```bash
+ft setup                       # Run setup wizard (also: ft init)
+ft doctor                      # Verify configuration
 ft work spawn <id>             # Spawn worker for a task
+ft work spawn --epic <name>    # Spawn all ready tasks
 ft work list                   # List spawnable tasks
 ft work watch --spawn          # Monitor + auto-spawn ready tasks
 ft work dashboard              # TUI dashboard
@@ -257,10 +327,9 @@ ft work inbox                  # Show blocked workers awaiting input
 ft task list <epic>            # List tasks in an epic
 ft task show <id>              # Show task details
 ft task complete <id>          # Mark task as complete
+ft epic create <name>          # Create an epic
 ft epic list                   # List all epics
 ft epic health <epic>          # Check epic health
-ft setup                       # Run setup wizard
-ft doctor                      # Verify configuration
 ```
 
 See the [CLI Reference](docs/cli/index.md) for full documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
@@ -275,7 +344,7 @@ formaltask/
 ├── epics/              # Epic CRUD, YAML parsing
 ├── git/                # Worktree management, PR queries
 ├── tasks/              # Task lifecycle, dependencies, guards
-├── validators/         # PreToolUse validators (TDD, doc-guard)
+├── validators/         # PreToolUse validators (doc-guard, sql-guard)
 ├── workers/            # Worker spawning, monitoring
 ├── apps/               # TUI applications (dashboard)
 └── utils/              # Shared utilities

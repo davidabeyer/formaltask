@@ -221,8 +221,8 @@ class TestRegisterHook:
 class TestRegisterRequiredHooks:
     """Tests for register_required_hooks function."""
 
-    def test_register_required_hooks_registers_all_three(self, tmp_path, monkeypatch):
-        """register_required_hooks registers Stop, SessionStart, PreToolUse hooks."""
+    def test_register_required_hooks_registers_all_five(self, tmp_path, monkeypatch):
+        """register_required_hooks registers Stop, SessionStart, PreToolUse, PostToolUse, UserPromptSubmit hooks."""
         # Arrange: empty settings.json
         settings_path = tmp_path / ".claude" / "settings.json"
         settings_path.parent.mkdir(parents=True)
@@ -235,17 +235,21 @@ class TestRegisterRequiredHooks:
         # Act
         results = register_required_hooks()
 
-        # Assert: all three hook types registered
-        assert len(results) == 3
+        # Assert: all five hook types registered
+        assert len(results) == 5
         hook_types = [r[0] for r in results]
         assert "Stop" in hook_types
         assert "SessionStart" in hook_types
         assert "PreToolUse" in hook_types
+        assert "PostToolUse" in hook_types
+        assert "UserPromptSubmit" in hook_types
         assert all(r[1] == "registered" for r in results)
         settings = json.loads(settings_path.read_text())
         assert "Stop" in settings["hooks"]
         assert "SessionStart" in settings["hooks"]
         assert "PreToolUse" in settings["hooks"]
+        assert "PostToolUse" in settings["hooks"]
+        assert "UserPromptSubmit" in settings["hooks"]
 
     def test_register_required_hooks_idempotent(self, tmp_path, monkeypatch):
         """Calling register_required_hooks twice doesn't duplicate hooks."""
@@ -263,9 +267,11 @@ class TestRegisterRequiredHooks:
         results = register_required_hooks()
 
         # Assert: second call returns "skipped" for all hooks
-        assert len(results) == 3
+        assert len(results) == 5
         assert all(r[1] == "skipped" for r in results)
         settings = json.loads(settings_path.read_text())
         assert len(settings["hooks"]["Stop"][0]["hooks"]) == 1
         assert len(settings["hooks"]["SessionStart"][0]["hooks"]) == 1
         assert len(settings["hooks"]["PreToolUse"][0]["hooks"]) == 1
+        assert len(settings["hooks"]["PostToolUse"][0]["hooks"]) == 1
+        assert len(settings["hooks"]["UserPromptSubmit"][0]["hooks"]) == 1

@@ -35,12 +35,9 @@ class TestExecute:
 
         # Setup hooks directory with runner files
         hooks_dir = tmp_path / "hooks"
-        (hooks_dir / "stop").mkdir(parents=True)
-        (hooks_dir / "session_start").mkdir(parents=True)
-        (hooks_dir / "pretool").mkdir(parents=True)
-        (hooks_dir / "stop" / "runner.py").write_text("")
-        (hooks_dir / "session_start" / "runner.py").write_text("")
-        (hooks_dir / "pretool" / "runner.py").write_text("")
+        for subdir in ("stop", "session_start", "pretool", "posttool", "promptsubmit"):
+            (hooks_dir / subdir).mkdir(parents=True)
+            (hooks_dir / subdir / "runner.py").write_text("")
 
         # Setup settings.json with required hooks pointing to runners
         home_claude = tmp_path / "home" / ".claude"
@@ -53,6 +50,12 @@ class TestExecute:
                 ],
                 "PreToolUse": [
                     {"hooks": [{"command": f"python3 {tmp_path}/hooks/pretool/runner.py"}]}
+                ],
+                "PostToolUse": [
+                    {"hooks": [{"command": f"python3 {tmp_path}/hooks/posttool/runner.py"}]}
+                ],
+                "UserPromptSubmit": [
+                    {"hooks": [{"command": f"python3 {tmp_path}/hooks/promptsubmit/runner.py"}]}
                 ],
             }
         }

@@ -4,7 +4,7 @@
 
 - Python 3.11, pytest, BATS
 - SQLite 3 — **Database: `PROJECT_ROOT/.claude/formaltask.db`** (NOT `~/.claude/`)
-- MCP servers, Git hooks, TDD Guard
+- MCP servers, Git hooks
 - tmux 3.2+ (for `-e` flag to pass TASK_ID env var to workers; older versions use worktree path fallback)
 
 ## Project Structure
@@ -21,7 +21,7 @@ formaltask/              # Repository root
 │   ├── review/         # Review context, prompt building
 │   ├── state/          # Findings, session tracking
 │   ├── tasks/          # Task lifecycle, dependencies, guards
-│   ├── validators/     # PreToolUse validators (TDD, doc-guard, etc.)
+│   ├── validators/     # PreToolUse validators (doc-guard, sql-guard, etc.)
 │   ├── vault/          # Knowledge storage
 │   ├── workers/        # Worker spawning, monitoring, resume
 │   ├── apps/           # TUI applications (dashboard, browse)
@@ -198,7 +198,7 @@ barrier = threading.Barrier(len(operations))
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
+| `OPENROUTER_API_KEY` | No | LLM-powered review self-critique and vault summarization. Not required for core task management |
 | `PROJECT_ROOT` | For tests and CLI | Database path resolution |
 | `ANTHROPIC_API_KEY` | GitHub Actions | Doc-update workflow (repo secret) |
 

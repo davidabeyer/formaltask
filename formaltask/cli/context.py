@@ -35,7 +35,7 @@ def _handle_db_error(e: Exception) -> int:
     """Print DB resolution error and return exit code 1."""
     if isinstance(e, FileNotFoundError):
         print(f"Error: Database not found - {e}")
-        print("  Ensure you're in a project with .claude/formaltask.db")
+        print("  Run 'ft setup' to initialize, or ensure you're in the correct project directory.")
     else:
         print(f"Error: Invalid --db-path: {e}")
     return 1

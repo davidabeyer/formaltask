@@ -7,12 +7,11 @@ Hook infrastructure for Claude Code automation. Event-driven workflows triggered
 ```
 hooks/
 ├── session_start/   # SessionStart hook + phases
-├── session_end/     # SessionEnd phases (skill session close)
+├── session_end/     # SessionEnd phases (currently empty)
 ├── stop/            # SubagentStop hook (completion enforcement)
 ├── pretool/         # PreToolUse validators
-├── posttool/        # PostToolUse handlers
+├── posttool/        # PostToolUse handlers (currently empty)
 ├── promptsubmit/    # UserPromptSubmit hooks
-├── pre_compact/     # PreCompact hooks (handoff generation)
 └── subagent_start/  # SubagentStart hooks
 ```
 
@@ -22,18 +21,16 @@ hooks/
 |------|---------|-----------|
 | SessionStart | Session begins | `session_start/phases/`, `task_context_loader.py` |
 | SessionEnd | Session ends | `session_end/phases/` |
-| SubagentStop | Subagent stops | `stop/phases/completion_enforcer.py` (review + completion) |
+| SubagentStop | Subagent stops | `stop/phases/completion_enforcer.py` (completion enforcement) |
 | UserPromptSubmit | User sends prompt | `promptsubmit/phases/` |
 | PreToolUse | Before tool calls | `pretool/phases/` |
 | PostToolUse | After tool calls | `posttool/phases/` |
-| PreCompact | Before compaction | `pre_compact/` (handoff_generator, transcript_snapshot) |
 | SubagentStart | Subagent starts | `subagent_start/` |
 
 ## Notable PreToolUse Validators
 
 | Phase | Behavior |
 |-------|----------|
-| `tool_redirect` | Blocks WebSearch — use exa instead |
 | `planning_schema_validator` | Blocks invalid CriterionV2 in `*-plan.yaml` / `*-spec.yaml` |
 | `epic_decompose_validator` | Validates spec directory structure (YAML-only, no markdown) |
 
@@ -43,7 +40,6 @@ Phase execution order: `hooks/pretool/runner.py` PHASES list. First block wins.
 
 | Variable | Required | Purpose |
 |----------|----------|---------|
-| `OPENROUTER_API_KEY` | No | LLM-powered hooks (handoff generation, vault capture). Core CLI works without it |
 | `PROJECT_ROOT` | For tests | Database path resolution |
 
 ## Common Gotchas
@@ -106,27 +102,3 @@ except OSError:
 except Exception as e:
     return default  # Hides TypeError, AttributeError, etc.
 ```
-
-### See Also
-
-- Error handling patterns documented above in this file
-
-## Skill Tracking & Step Enforcement
-
-Span-based system tracking every skill/step invocation. See `README.md` for full architecture diagram.
-
-| Hook | Phase | File | Purpose |
-|------|-------|------|---------|
-| UserPromptSubmit | `skill_run_initializer` | `promptsubmit/phases/` | CLI `/skill` detection, SkillRun creation, mode injection |
-| PreToolUse | `step_gate` | `pretool/phases/` | **Enforces** consumes/produces DAG — blocks out-of-order step reads |
-| PreToolUse | `skill_stage_tracker` | `pretool/phases/` | Registers planning stages for planning skills |
-| PostToolUse | `step_logger` | `posttool/phases/` | **Tracks** all step/SKILL.md reads → `skill_span` + `life_event` tables |
-| SessionEnd | `close_active_skill_session` | `session_end/phases/` | Completes all active spans, prevents cross-session bleed |
-
-**DB:** Skill tracking database — `skill_span` (per-invocation spans) + `life_event` (append-only ledger)
-
-**Step frontmatter:** `consumes: [X]` / `produces: [Y]` / `optional: true` in each `steps/*.md`
-
-## See Also
-
-- `README.md` - Full documentation with skill tracking architecture, review system, patterns

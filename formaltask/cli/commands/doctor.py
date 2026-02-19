@@ -17,6 +17,8 @@ REQUIRED_HOOKS = {
     "Stop": "hooks/stop/runner.py",
     "SessionStart": "hooks/session_start/runner.py",
     "PreToolUse": "hooks/pretool/runner.py",
+    "PostToolUse": "hooks/posttool/runner.py",
+    "UserPromptSubmit": "hooks/promptsubmit/runner.py",
 }
 
 
@@ -97,7 +99,7 @@ def execute(args) -> int:
                     print(f"    {err}")
                 ok = False
             else:
-                print("✓ Claude hooks (Stop, SessionStart, PreToolUse)")
+                print("✓ Claude hooks (Stop, SessionStart, PreToolUse, PostToolUse, UserPromptSubmit)")
         except json.JSONDecodeError:
             print("✗ ~/.claude/settings.json invalid JSON")
             ok = False

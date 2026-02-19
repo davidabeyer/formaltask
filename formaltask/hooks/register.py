@@ -131,6 +131,8 @@ def register_required_hooks() -> list[tuple[str, str]]:
         ("Stop", "", get_hook_script_path("hooks/stop/runner.py"), 5000),
         ("SessionStart", "", get_hook_script_path("hooks/session_start/runner.py"), 10000),
         ("PreToolUse", "", get_hook_script_path("hooks/pretool/runner.py"), 10000),
+        ("PostToolUse", "", get_hook_script_path("hooks/posttool/runner.py"), 5000),
+        ("UserPromptSubmit", "", get_hook_script_path("hooks/promptsubmit/runner.py"), 5000),
     ]
 
     results = []
