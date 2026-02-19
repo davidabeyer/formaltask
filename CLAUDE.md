@@ -84,9 +84,9 @@ ft task list my-epic
 ```bash
 ft work spawn <id>                          # NOT worker-spawn, NOT task-start
 ft task complete <id>                       # NO --comment flag exists!
-ft task complete <id> --skip-review
-ft task complete <id> --create-pr
-ft task cancel <id> [--force]
+ft task complete <id> --no-evidence          # Skip evidence guard (audit/doc tasks)
+ft task complete <id> --completion-evidence "TEXT"  # Provide pre-existing evidence
+ft task cancel <id> --reason "..."           # Reason required (min 20 chars)
 tmux kill-session -t task-<id>
 ft review disposition FILE LINE --reason "R"  # wontfix (--needshuman to escalate)
 ft work inbox                              # View blocked workers awaiting input

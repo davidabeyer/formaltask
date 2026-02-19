@@ -80,6 +80,22 @@ ft work spawn --epic auth-system
 
 FormalTask respects dependency chains — it only spawns tasks whose dependencies are complete.
 
+### Full Planning Cycle
+
+The walkthrough above uses `ft task add` for quick task creation. For larger projects, the planning cycle adds structured enforcement:
+
+```
+/plan → /critique → /revise → /decompose → ft epic decompose <name> <spec-dir>
+```
+
+Tasks created via `ft epic decompose` gain:
+- **Executable acceptance criteria** — commands that run at completion time
+- **Input/output wiring** — cross-task data handoff with auto-inferred dependencies
+- **Full spec as worker context** — the complete YAML spec stored for the worker to reference
+- **Structural validation** — quality checks before tasks enter the queue
+
+See [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the full lifecycle.
+
 ## How It Works
 
 ```
@@ -316,20 +332,50 @@ Task data is stored in `.claude/formaltask.db` (SQLite).
 ## CLI Reference
 
 ```bash
-ft setup                       # Run setup wizard (also: ft init)
-ft doctor                      # Verify configuration
-ft work spawn <id>             # Spawn worker for a task
-ft work spawn --epic <name>    # Spawn all ready tasks
-ft work list                   # List spawnable tasks
-ft work watch --spawn          # Monitor + auto-spawn ready tasks
-ft work dashboard              # TUI dashboard
-ft work inbox                  # Show blocked workers awaiting input
-ft task list <epic>            # List tasks in an epic
-ft task show <id>              # Show task details
-ft task complete <id>          # Mark task as complete
-ft epic create <name>          # Create an epic
-ft epic list                   # List all epics
-ft epic health <epic>          # Check epic health
+# Setup
+ft setup                                      # Setup wizard (also: ft init)
+ft doctor                                     # Verify configuration
+
+# Task management
+ft task add <epic> "Title" "Desc" --criteria "..."  # Add task to epic
+ft task list <epic>                           # List tasks in an epic
+ft task show <id>                             # Show task details
+ft task update <id> --title/--add-criteria/--depends-on  # Update task fields
+ft task complete <id>                         # Complete task (runs quality gates)
+ft task complete <id> --no-evidence           # Skip evidence guard (audit/doc tasks)
+ft task cancel <id> --reason "..."            # Cancel task (reason required)
+ft task defer <id> --reason "..."             # Defer task
+ft task create-from-finding FILE LINE --title "..."  # New task from review finding
+
+# Epic management
+ft epic create <name>                         # Create epic
+ft epic list                                  # List all epics
+ft epic close <name>                          # Archive epic
+ft epic decompose <name> <spec-dir>           # Create tasks from spec YAMLs
+ft epic update <name> --feature-branch <branch>  # Set feature branch
+ft epic review <name>                         # Check merge readiness
+ft epic health <name>                         # Check dependency health
+
+# Reviews
+ft review store '<json>'                      # Store review packet
+ft review disposition FILE LINE --reason "R"  # Disposition a finding
+
+# Git integration
+ft commit-scan --task-id <id>                 # Scan commits for task evidence
+ft commit-link <task-id> <hash>               # Manually link commit to task
+
+# Worker management
+ft work spawn <id>                            # Spawn single worker
+ft work spawn --epic <name>                   # Spawn all ready tasks
+ft work list                                  # List spawnable tasks
+ft work watch --spawn                         # Monitor + auto-spawn
+ft work dashboard                             # TUI dashboard
+ft work inbox                                 # Show blocked workers
+ft work resume <id>                           # Resume existing session
+ft work restart                               # Restart orphaned workers
+
+# Templates
+ft formula list/cook/batch                    # Template management
 ```
 
 See the [CLI Reference](docs/cli/index.md) for full documentation, [Planning Workflow](skills/PLANNING-WORKFLOW.md) for the plan→critique→revise→decompose lifecycle, and [Architecture Overview](docs/architecture/overview.md) for how the pieces fit together.
