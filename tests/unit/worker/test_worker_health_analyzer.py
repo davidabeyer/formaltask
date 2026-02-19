@@ -358,7 +358,7 @@ class TestGetWorkerStateDictDerivedPhase:
             findings = json.dumps([{"priority": "P1", "message": "Critical issue"}])
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, reviewed_at)
-                   VALUES (42, 'code-quality', 'critical', ?, datetime('now'))""",
+                   VALUES (42, 'acceptance', 'critical', ?, datetime('now'))""",
                 (findings,),
             )
 
@@ -394,7 +394,7 @@ class TestGetWorkerStateDictDerivedPhase:
             findings = json.dumps([])
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, reviewed_at)
-                   VALUES (42, 'code-quality', 'clean', ?, datetime('now'))""",
+                   VALUES (42, 'acceptance', 'clean', ?, datetime('now'))""",
                 (findings,),
             )
 
@@ -432,7 +432,7 @@ class TestGetWorkerStateDictDerivedPhase:
             findings = json.dumps([])
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, reviewed_at)
-                   VALUES (42, 'code-quality', 'clean', ?, datetime('now'))""",
+                   VALUES (42, 'acceptance', 'clean', ?, datetime('now'))""",
                 (findings,),
             )
 
@@ -473,7 +473,7 @@ class TestGetWorkerStateDictDerivedPhase:
             findings = json.dumps([{"priority": "P1", "message": "Critical security issue"}])
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, reviewed_at)
-                   VALUES (42, 'code-quality', 'critical', ?, datetime('now'))""",
+                   VALUES (42, 'acceptance', 'critical', ?, datetime('now'))""",
                 (findings,),
             )
 
@@ -547,7 +547,7 @@ class TestGetWorkerStateDictDerivedPhase:
             findings = json.dumps([])
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, reviewed_at)
-                   VALUES (42, 'code-quality', 'clean', ?, datetime('now'))""",
+                   VALUES (42, 'acceptance', 'clean', ?, datetime('now'))""",
                 (findings,),
             )
 
@@ -871,5 +871,3 @@ class TestGetWorkerStateDictGitHubPRUtils:
 
         assert state["pr_number"] is None
         assert state["pr_status"] == "none"
-
-

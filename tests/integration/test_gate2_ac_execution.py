@@ -26,7 +26,7 @@ def _setup_task_with_reviews(conn, ac_command: str) -> None:
     findings = make_valid_review_findings()
     conn.execute(
         f"""INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-           VALUES (1, 'code-quality', 'clean', '{findings}', 1, '2025-01-01T00:00:00Z')"""
+           VALUES (1, 'acceptance', 'clean', '{findings}', 1, '2025-01-01T00:00:00Z')"""
     )
 
 
@@ -140,7 +140,7 @@ class TestGate2MixedAC:
             findings = make_valid_review_findings()
             conn.execute(
                 f"""INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'clean', '{findings}', 1, '2025-01-01T00:00:00Z')"""
+                   VALUES (1, 'acceptance', 'clean', '{findings}', 1, '2025-01-01T00:00:00Z')"""
             )
 
         result = check_completion(1, db_path)

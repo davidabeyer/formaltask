@@ -207,7 +207,7 @@ class TestRequirePREnvVar:
             # Clean review (no findings)
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
+                   VALUES (1, 'acceptance', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
             )
 
         result = check_completion(1, db_path)
@@ -248,7 +248,7 @@ class TestRequirePRMergedEnvVar:
             )
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
+                   VALUES (1, 'acceptance', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
             )
 
         result = check_completion(1, db_path)
@@ -739,7 +739,7 @@ class TestCleanReviewAllowsCompletion:
             # Clean review with no findings - all gates pass
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
+                   VALUES (1, 'acceptance', 'clean', '[]', 1, '2025-01-01T00:00:00Z')"""
             )
 
         result = check_completion(1, db_path)
@@ -770,10 +770,12 @@ class TestTaskLevelCompletionRules:
                 "name": "Round cap reached",
             }
         ]
-        metadata = json.dumps({
-            "required_reviews": ["self-critique"],
-            "completion_rules": rules,
-        })
+        metadata = json.dumps(
+            {
+                "required_reviews": ["self-critique"],
+                "completion_rules": rules,
+            }
+        )
 
         with DatabaseConnection(db_path) as conn:
             conn.execute(
@@ -870,7 +872,7 @@ class TestDispositionExemptions:
             # P0 finding that would normally block
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'critical',
+                   VALUES (1, 'acceptance', 'critical',
                    '[{"priority": "P0", "file": "test.py", "line": 10, "description": "critical bug"}]', 1, '2025-01-01T00:00:00Z')"""
             )
             # Mark with WONTFIX disposition (stored lowercase in DB)
@@ -921,7 +923,7 @@ class TestDispositionExemptions:
             # P0 finding that would normally block
             conn.execute(
                 """INSERT INTO task_reviews (task_id, review_type, severity, findings, round, reviewed_at)
-                   VALUES (1, 'code-quality', 'critical',
+                   VALUES (1, 'acceptance', 'critical',
                    '[{"priority": "P0", "file": "test.py", "line": 20, "description": "security issue"}]', 1, '2025-01-01T00:00:00Z')"""
             )
             # Mark with FIXED disposition (stored lowercase in DB)

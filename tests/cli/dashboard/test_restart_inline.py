@@ -39,7 +39,7 @@ class TestRestartInlineDoubleTapConfirmation:
 
         app.notify.assert_called_once()
         args, kwargs = app.notify.call_args
-        assert "42" in args[0]
+        assert "42" in kwargs.get("title", "")
         assert kwargs.get("severity") == "warning"
 
     def test_restart_second_press_within_timeout_executes(self) -> None:
@@ -107,7 +107,7 @@ class TestRestartInlineDoubleTapConfirmation:
 
         app.notify.assert_called_once()
         args, kwargs = app.notify.call_args
-        assert "no worker" in args[0].lower()
+        assert "select a worker" in args[0].lower()
         assert kwargs.get("severity") == "error"
 
 
@@ -120,10 +120,12 @@ class TestRestartInlineExecuteRestart:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Worktree doesn't exist - patch task_worktree to return nonexistent path
-        with patch("formaltask.apps.dashboard.app.task_worktree") as mock_wt:
+        with (
+            patch("formaltask.apps.dashboard.app.task_worktree") as mock_wt,
+            patch.object(app, "query_one", return_value=MagicMock()),
+        ):
             mock_wt.return_value = tmp_path / ".claude" / "worktrees" / "task-42"
             app._execute_restart(42)
 
@@ -135,29 +137,30 @@ class TestRestartInlineExecuteRestart:
         )
 
     def test_execute_restart_clears_notifications_first(self, tmp_path) -> None:
-        """_execute_restart should clear notifications before starting."""
+        """_execute_restart should attempt to clear status bar flash before restarting."""
         from formaltask.apps.dashboard.app import WorkerDashboard
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
+        mock_status_bar = MagicMock()
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
             patch("formaltask.apps.dashboard.app.create_session", return_value=True),
-            patch("subprocess.run") as mock_run,
             patch("formaltask.apps.dashboard.app.send_keys", return_value=True),
+            patch("formaltask.apps.dashboard.app.get_claude_home", return_value=tmp_path),
+            patch.object(app, "query_one", return_value=mock_status_bar),
+            patch("subprocess.run") as mock_run,
         ):
-            mock_path.home.return_value = tmp_path
             mock_run.return_value = MagicMock(returncode=0)
             app._execute_restart(42)
 
-        app.clear_notifications.assert_called_once()
+        mock_status_bar.clear_flash.assert_called_once()
 
     def test_execute_restart_notifies_on_success(self, tmp_path) -> None:
         """_execute_restart should notify with attach hint on success."""
@@ -165,20 +168,20 @@ class TestRestartInlineExecuteRestart:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
             patch("formaltask.apps.dashboard.app.create_session", return_value=True),
-            patch("subprocess.run") as mock_run,
             patch("formaltask.apps.dashboard.app.send_keys", return_value=True),
+            patch("formaltask.apps.dashboard.app.get_claude_home", return_value=tmp_path),
+            patch.object(app, "query_one", return_value=MagicMock()),
+            patch("subprocess.run") as mock_run,
         ):
-            mock_path.home.return_value = tmp_path
             mock_run.return_value = MagicMock(returncode=0)
             app._execute_restart(42)
 
@@ -200,19 +203,17 @@ class TestRestartInlineFailureModes:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
-            patch("subprocess.run") as mock_run,
+            patch("formaltask.apps.dashboard.app.create_session", return_value=False),
+            patch.object(app, "query_one", return_value=MagicMock()),
         ):
-            mock_path.home.return_value = tmp_path
-            mock_run.return_value = MagicMock(returncode=1, stderr=b"error")
             app._execute_restart(42)
 
         error_calls = [c for c in app.notify.call_args_list if c.kwargs.get("severity") == "error"]
@@ -227,18 +228,17 @@ class TestRestartInlineFailureModes:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
             patch("formaltask.apps.dashboard.app.create_session") as mock_create,
+            patch.object(app, "query_one", return_value=MagicMock()),
         ):
-            mock_path.home.return_value = tmp_path
             mock_create.side_effect = sp.TimeoutExpired("tmux", 30)
             app._execute_restart(42)
 
@@ -252,18 +252,17 @@ class TestRestartInlineFailureModes:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
             patch("formaltask.apps.dashboard.app.create_session") as mock_create,
+            patch.object(app, "query_one", return_value=MagicMock()),
         ):
-            mock_path.home.return_value = tmp_path
             mock_create.side_effect = OSError("Permission denied")
             app._execute_restart(42)
 
@@ -277,21 +276,19 @@ class TestRestartInlineFailureModes:
 
         app = WorkerDashboard()
         app.notify = MagicMock()
-        app.clear_notifications = MagicMock()
 
         # Create worktree
         worktree = tmp_path / ".claude" / "worktrees" / "task-42"
         worktree.mkdir(parents=True)
 
         with (
-            patch("formaltask.apps.dashboard.app.Path") as mock_path,
+            patch("formaltask.apps.dashboard.app.task_worktree", return_value=worktree),
             patch("formaltask.apps.dashboard.app.kill_session"),
             patch("formaltask.apps.dashboard.app.create_session", return_value=True),
-            patch("subprocess.run") as mock_run,
             patch("formaltask.apps.dashboard.app.send_keys", return_value=False),
+            patch("formaltask.apps.dashboard.app.get_claude_home", return_value=tmp_path),
+            patch.object(app, "query_one", return_value=MagicMock()),
         ):
-            mock_path.home.return_value = tmp_path
-            mock_run.return_value = MagicMock(returncode=0)
             app._execute_restart(42)
 
         error_calls = [c for c in app.notify.call_args_list if c.kwargs.get("severity") == "error"]

@@ -35,7 +35,9 @@ class TestReportCreatesBlockerTask:
         from formaltask.cli.commands.report import execute
 
         args = Namespace(
-            description="Fix: test infrastructure issue",
+            title="Fix: test infrastructure issue",
+            description=None,
+            epic=None,
             db_path=report_context["db_path"],
         )
         result = execute(args)
@@ -64,7 +66,7 @@ class TestReportCreatesBlockerTask:
 
         monkeypatch.setattr(report, "get_task_id_from_session", lambda: None)
 
-        args = Namespace(description="Some issue", db_path=db_path)
+        args = Namespace(title="Some issue", description=None, epic=None, db_path=db_path)
         result = report.execute(args)
 
         assert result == ExitCode.NOT_FOUND
@@ -80,7 +82,9 @@ class TestReportDedup:
         from formaltask.cli.commands.report import execute
 
         args1 = Namespace(
-            description="Fix: test infrastructure issue",
+            title="Fix: test infrastructure issue",
+            description=None,
+            epic=None,
             db_path=report_context["db_path"],
         )
         result1 = execute(args1)
@@ -93,7 +97,9 @@ class TestReportDedup:
             ).fetchone()[0]
 
         args2 = Namespace(
-            description="Another issue",
+            title="Another issue",
+            description=None,
+            epic=None,
             db_path=report_context["db_path"],
         )
         result2 = execute(args2)
@@ -121,7 +127,9 @@ class TestBlockerSpawnable:
         from formaltask.cli.commands.spawnable import spawnable
 
         args = Namespace(
-            description="Fix: infrastructure issue",
+            title="Fix: infrastructure issue",
+            description=None,
+            epic=None,
             db_path=report_context["db_path"],
         )
         execute(args)

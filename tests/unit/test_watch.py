@@ -77,7 +77,7 @@ class TestEvaluateOrchestrationRules:
         # Insert task with known created_at for duration calculation
         # Use 'localtime' to match Python's datetime.now() which returns local time
         conn.execute(
-            "INSERT INTO tasks (id, status, created_at) VALUES (1, 'in_progress', datetime('now', '-3700 seconds', 'localtime'))"
+            "INSERT INTO tasks (id, status, created_at) VALUES (1, 'in_progress', datetime('now', '-3700 seconds') || '+00:00')"
         )
         conn.commit()
         conn.close()

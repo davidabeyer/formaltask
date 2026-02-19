@@ -37,8 +37,8 @@ def test_x_key_first_press_sets_pending_kill() -> None:
     assert stub._pending_kill[0] == 42
     stub.notify.assert_called_once()
     call_args = stub.notify.call_args
-    assert "again to kill" in call_args[0][0]
-    assert call_args[1]["severity"] == "warning"
+    assert "again within 3s to confirm" in call_args[0][0]
+    assert call_args.kwargs["severity"] == "warning"
 
 
 def test_x_key_second_press_executes_kill() -> None:
@@ -81,7 +81,7 @@ def test_x_key_different_task_resets_pending() -> None:
     assert stub._pending_kill is not None
     assert stub._pending_kill[0] == 99
     stub.notify.assert_called_once()
-    assert "task-99" in stub.notify.call_args[0][0]
+    assert "task-99" in stub.notify.call_args.kwargs.get("title", "")
 
 
 def test_x_key_no_worker_selected_shows_error() -> None:
@@ -90,4 +90,4 @@ def test_x_key_no_worker_selected_shows_error() -> None:
 
     WorkerDashboard.action_kill(stub)
 
-    stub.notify.assert_called_once_with("No worker selected", severity="error")
+    stub.notify.assert_called_once_with("Select a worker first", title="No Selection", severity="error")

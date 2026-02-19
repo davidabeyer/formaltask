@@ -36,11 +36,8 @@ from hooks.pretool.phases import (
     grep_redirect,
     planning_schema_validator,
     prompt_injection,
-    skill_stage_tracker,
     skill_todo_validator,
     sql_guard,
-    step_gate,
-    subagent_step_tracker,
     task_context_injector,
     task_validator,
     tdd_guard,
@@ -51,9 +48,6 @@ from hooks.pretool.phases import (
 
 logger = logging.getLogger(__name__)
 PHASES = [
-    skill_stage_tracker.check,
-    step_gate.check,
-    subagent_step_tracker.check,
     task_context_injector.check,
     doc_guard.check,
     sql_guard.check,

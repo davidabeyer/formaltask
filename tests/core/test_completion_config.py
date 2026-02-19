@@ -86,7 +86,7 @@ class TestGetEffectiveConfig:
         config = get_effective_config(task_id, db_path)
 
         # These should be the default values from rules_config.py
-        assert config.required_reviews == ["code-quality"]
+        assert config.required_reviews == ["acceptance"]
         assert config.check_freshness is True
         assert config.require_pr is False
         assert config.require_pr_merged is False
@@ -174,4 +174,4 @@ class TestGetEffectiveConfig:
         config = get_effective_config(task_id, db_path)
 
         # Empty list should fall back to default
-        assert config.required_reviews == ["code-quality"]
+        assert config.required_reviews == ["acceptance"]
