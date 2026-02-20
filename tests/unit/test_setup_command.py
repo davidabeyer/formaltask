@@ -2,6 +2,8 @@
 
 from unittest.mock import MagicMock, patch
 
+import formaltask.cli.pm as pm_module
+
 
 class TestPluginDiscovery:
     """Tests for plugin interface compliance."""
@@ -171,3 +173,28 @@ class TestHookRegistration:
         captured = capsys.readouterr()
         output = (captured.out + captured.err).lower()
         assert "permission" in output
+
+
+class TestSetupWithNoDatabase:
+    """Tests for ft setup when database doesn't exist (new user scenario)."""
+
+    def test_setup_dispatches_when_no_database_exists(self, tmp_path, monkeypatch):
+        """pm.main() dispatches to setup even when no database exists.
+
+        Reproduces: new user runs 'ft setup' in a fresh repo, gets
+        'Database not found' error because pm.main() tries to resolve
+        db_path via get_db_path() before dispatching to setup.
+        """
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.delenv("PROJECT_ROOT", raising=False)
+        # No .claude/formaltask.db exists — this is the new user scenario
+
+        mock_execute = MagicMock(return_value=0)
+        with (
+            patch("sys.argv", ["ft", "setup", "--yes"]),
+            patch("formaltask.cli.commands.setup.execute", mock_execute),
+        ):
+            result = pm_module.main()
+
+        assert result == 0
+        mock_execute.assert_called_once()

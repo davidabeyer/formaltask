@@ -97,12 +97,13 @@ Global Flags (before subcommand):
     args = parser.parse_args()
 
     # Resolve db_path if not explicitly provided
-    if hasattr(args, "db_path") and args.db_path is None:
+    # Skip for setup — it creates the database and handles its own path
+    if args.command != "setup" and hasattr(args, "db_path") and args.db_path is None:
         try:
             args.db_path = str(get_db_path())
         except FileNotFoundError as e:
             print(f"Error: Database not found - {e}", file=sys.stderr)
-            print("  Ensure you're in a project with .claude/formaltask.db", file=sys.stderr)
+            print("  Run 'ft setup' to initialize, or ensure you're in the correct project directory.", file=sys.stderr)
             return 1
         except ValueError as e:
             print(f"Security error: {e}", file=sys.stderr)
