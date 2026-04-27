@@ -80,6 +80,22 @@ def ensure_schema_initialized(db_path: str) -> None:
     # Run Python migrations (SQL migrations removed in Task #2654)
     _run_python_migrations(db_path)
 
+    # Ensure default _inbox epic for ad-hoc task capture (linear-to-ft port)
+    ensure_inbox_epic(db_path)
+
+
+def ensure_inbox_epic(db_path: str) -> None:
+    """Ensure default _inbox epic exists for ad-hoc task capture.
+
+    Idempotent — INSERT OR IGNORE skips if already present.
+    """
+    with DatabaseConnection(str(db_path)) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR IGNORE INTO epics (name, description, created_at) "
+            "VALUES ('_inbox', 'Default inbox for quick tasks', datetime('now'))"
+        )
+
 
 def _run_python_migrations(db_path: str) -> None:
     """Run pending Python migrations from formaltask/db/migrations/.
