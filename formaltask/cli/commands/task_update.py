@@ -1,5 +1,6 @@
 """Task update command for in-situ task editing (Task #1320)."""
 
+import argparse
 import json
 import sys
 
@@ -50,16 +51,45 @@ def setup_parser(subparser):
         help="Remove all dependencies (sets depends_on to [])",
     )
     subparser.add_argument(
+        "--due-date",
+        type=str,
+        dest="due_date",
+        help="Set due date (YYYY-MM-DD format)",
+    )
+    subparser.add_argument(
+        "--priority",
+        type=int,
+        dest="priority",
+        help="Set priority level (1=highest)",
+    )
+    subparser.add_argument(
         "--db-path",
         default=None,
         help="Database path (default: auto-detect)",
     )
+    # Hidden trap: callers historically passed `--status X` here even though
+    # state transitions belong to dedicated verbs. Accept silently (SUPPRESS
+    # hides from --help) and emit a verb-mapping hint in execute().
+    subparser.add_argument("--status", type=str, help=argparse.SUPPRESS)
 
 
 @with_db_path
 def execute(db_path: str, args) -> int:
     """Execute the task-update command."""
     try:
+        if getattr(args, "status", None):
+            print(
+                "Error: `ft task update` does not change state. Use a dedicated verb:\n"
+                "  --status active         →  ft task start <id>\n"
+                "  --status completed      →  ft task complete <id>\n"
+                "  --status cancelled      →  ft task cancel <id> --reason \"<20+ chars>\"\n"
+                "  --status deferred       →  ft task defer <id> --reason \"<reason>\"\n"
+                "  --status review         →  ft task pending-review <id>\n"
+                "  --status blocked        →  ft task blocked \"<question>\" --task-id <id>\n"
+                "  (reset in_progress→open) →  ft task update <id> --reset-status",
+                file=sys.stderr,
+            )
+            return 1
         # Check for mutually exclusive flags
         if getattr(args, "depends_on", None) and getattr(args, "clear_deps", False):
             print("Error: --depends-on and --clear-deps are mutually exclusive", file=sys.stderr)
@@ -88,9 +118,15 @@ def execute(db_path: str, args) -> int:
         elif getattr(args, "clear_deps", False):
             task_update_dependencies(args.task_id, [], db_path)
             print(f"✓ Cleared task #{args.task_id} dependencies")
+        elif getattr(args, "due_date", None):
+            _update_field(args.task_id, "due_date", args.due_date, db_path)
+            print(f"✓ Updated task #{args.task_id} due date to {args.due_date}")
+        elif getattr(args, "priority", None) is not None:
+            _update_field(args.task_id, "priority", str(args.priority), db_path)
+            print(f"✓ Updated task #{args.task_id} priority to {args.priority}")
         else:
             print(
-                "Error: Specify an update flag (--title, --description, --add-criteria, --remove-criteria, --reset-status, --metadata, --depends-on, --clear-deps)",
+                "Error: Specify an update flag (--title, --description, --add-criteria, --remove-criteria, --reset-status, --metadata, --depends-on, --clear-deps, --due-date, --priority)",
                 file=sys.stderr,
             )
             return 1

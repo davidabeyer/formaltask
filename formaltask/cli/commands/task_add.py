@@ -35,6 +35,8 @@ def task_add(
     metadata: dict | None = None,
     status: str | None = None,
     post_create_callback: Callable[[int], None] | None = None,
+    due_date: str | None = None,
+    priority: int | None = None,
 ) -> int:
     """Add a new task to an epic.
 
@@ -49,6 +51,8 @@ def task_add(
         status: Initial task status (default: 'open', use 'blocked' for critique-first workflow)
         post_create_callback: Optional callback to run after task creation.
             If this fails, the task is deleted (compensating transaction).
+        due_date: Optional due date in YYYY-MM-DD format
+        priority: Optional priority level (1=highest)
 
     Returns:
         Task ID of created task
@@ -66,6 +70,8 @@ def task_add(
         depends_on=depends_on,
         metadata=metadata,
         status=status,
+        due_date=due_date,
+        priority=priority,
     )
 
     # Run post-creation callback if provided
@@ -136,6 +142,24 @@ def setup_parser(subparser: argparse.ArgumentParser) -> None:
         choices=["open", "blocked"],
         default="open",
         help="Initial task status (default: open, use blocked for critique-first workflow)",
+    )
+    subparser.add_argument(
+        "--label",
+        action="append",
+        dest="labels",
+        help="Add label to task metadata (use multiple --label flags)",
+    )
+    subparser.add_argument(
+        "--due-date",
+        type=str,
+        dest="due_date",
+        help="Due date (YYYY-MM-DD format)",
+    )
+    subparser.add_argument(
+        "--priority",
+        type=int,
+        dest="priority",
+        help="Priority level (1=highest)",
     )
     subparser.add_argument(
         "--template",
@@ -225,8 +249,17 @@ def execute(ctx: CLIContext, args: argparse.Namespace) -> int:
                 )
                 return 1
 
+        # Merge labels into metadata
+        if getattr(args, "labels", None):
+            existing_labels = explicit_metadata.get("labels", [])
+            explicit_metadata["labels"] = existing_labels + args.labels
+
         # Merge template defaults with explicit metadata
         metadata = merge_template(template_name, explicit_metadata)
+
+        # Handle due_date and priority as direct column values
+        due_date = getattr(args, "due_date", None)
+        priority = getattr(args, "priority", None)
 
         task_id = task_add(
             epic_name=args.epic_name,
@@ -237,6 +270,8 @@ def execute(ctx: CLIContext, args: argparse.Namespace) -> int:
             depends_on=args.depends_on,
             metadata=metadata if metadata else None,
             status=args.status,
+            due_date=due_date,
+            priority=priority,
         )
 
         result_data = {"task_id": task_id, "epic_name": args.epic_name}

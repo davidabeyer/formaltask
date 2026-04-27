@@ -76,6 +76,7 @@ def epic_list(
     *,
     show_archived: bool = False,
     json_mode: bool = False,
+    search: str | None = None,
 ) -> dict | None:
     """List all epics with status information.
 
@@ -83,6 +84,7 @@ def epic_list(
         db_path: Path to the database
         show_archived: Include archived epics (default: False)
         json_mode: Return structured data for JSON output (default: False)
+        search: Filter by epic_name or description (case-insensitive, LIKE-escaped)
 
     Returns:
         dict: {"epics": [...]} when json_mode=True
@@ -93,17 +95,26 @@ def epic_list(
     """
     columns = ", ".join(_EPIC_STATUS_COLUMNS)
     query = f"SELECT {columns} FROM epic_status"  # noqa: S608 - columns are hardcoded
+    conditions = []
+    params: list[str] = []
     if not show_archived:
-        query += " WHERE archived_at IS NULL"
+        conditions.append("archived_at IS NULL")
+    if search:
+        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        pattern = f"%{escaped}%"
+        conditions.append("(epic_name LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\')")
+        params.extend([pattern, pattern])
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
     query += " ORDER BY created_at DESC"
 
     try:
         with DatabaseConnection(db_path) as conn:
             cursor = conn.cursor()
-            # Safe: query built from hardcoded column names and table, no user input
+            # Safe: query built from hardcoded column names and table, params are bound
             # nosemgrep: python.sqlalchemy.security.sqlalchemy-execute-raw-query.sqlalchemy-execute-raw-query
             cursor.execute(  # nosemgrep: python.lang.security.audit.formatted-sql-query.formatted-sql-query
-                query
+                query, params
             )
             rows = cursor.fetchall()
     except sqlite3.OperationalError as e:
@@ -177,6 +188,11 @@ def setup_parser(subparser):
         help="Output only epic names, one per line (for scripting)",
     )
     subparser.add_argument(
+        "--search",
+        "-s",
+        help="Filter epics by name or description (case-insensitive)",
+    )
+    subparser.add_argument(
         "--db-path",
         default=None,
         help="Path to database (default: auto-detect)",
@@ -194,6 +210,7 @@ def execute(db_path: str, args) -> int:
             db_path=db_path,
             show_archived=getattr(args, "archived", False),
             json_mode=json_output or names_only,  # Need structured data for --names
+            search=getattr(args, "search", None),
         )
 
         if names_only and result is not None:

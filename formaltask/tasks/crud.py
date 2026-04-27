@@ -35,6 +35,8 @@ def create_task(
     is_parallel: bool = False,
     metadata: dict | None = None,
     status: str | None = None,
+    due_date: str | None = None,
+    priority: int | None = None,
 ) -> int:
     """Create a new task with acceptance criteria.
 
@@ -48,6 +50,8 @@ def create_task(
         is_parallel: Whether task can run in parallel
         metadata: Additional metadata dict
         status: Initial status (defaults to "open")
+        due_date: Optional due date in YYYY-MM-DD format
+        priority: Optional priority level (1=highest)
 
     Returns:
         The ID of the created task.
@@ -89,8 +93,8 @@ def create_task(
             metadata_json = json.dumps(metadata) if metadata else None
             task_status = status or "open"
             cursor.execute(
-                """INSERT INTO tasks (epic_name, title, description, status, position, created_at, depends_on, is_parallel, metadata)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO tasks (epic_name, title, description, status, position, created_at, depends_on, is_parallel, metadata, due_date, priority)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     epic_name,
                     title,
@@ -101,6 +105,8 @@ def create_task(
                     depends_on_json,
                     1 if is_parallel else 0,
                     metadata_json,
+                    due_date,
+                    priority,
                 ),
             )
             task_id = cursor.lastrowid
