@@ -21,14 +21,20 @@ def task_show(task_id: int, db_path: str, show_deps: bool = False) -> dict:
     with DatabaseConnection(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT id, title, status, epic_name, depends_on, is_parallel FROM tasks WHERE id = ?",
+            "SELECT id, title, status, epic_name, depends_on, is_parallel, due_date, priority FROM tasks WHERE id = ?",
             (task_id,),
         )
         row = cursor.fetchone()
         if not row:
             return {}
 
-        result = {"task_id": row[0], "title": row[1], "status": row[2]}
+        result = {
+            "task_id": row[0],
+            "title": row[1],
+            "status": row[2],
+            "due_date": row[6],
+            "priority": row[7],
+        }
         if not show_deps:
             return result
 
@@ -69,6 +75,10 @@ def execute(db_path: str, args: argparse.Namespace) -> int:
 
     print(f"Task {format_task_label(result['task_id'], result['title'], max_title_length=200)}")
     print(f"Status: {result['status']}")
+    if result.get("due_date"):
+        print(f"Due: {result['due_date']}")
+    if result.get("priority") is not None:
+        print(f"Priority: {result['priority']}")
 
     if args.deps:
         print(f"Epic: {result['epic_name']}")
@@ -81,4 +91,25 @@ def execute(db_path: str, args: argparse.Namespace) -> int:
         print("Dependents:" if dependents else "Dependents: (none)")
         for dep in dependents:
             print(f"  #{dep['id']} [{dep['status']}] {dep['title']}")
+
+    # Show comments (linear-to-ft port: task_comments table)
+    comments = _get_comments(args.task_id, db_path)
+    if comments:
+        print("Comments:")
+        for c in comments:
+            print(f"  [{c['created_at']}] {c['text']}")
+
     return 0
+
+
+def _get_comments(task_id: int, db_path: str) -> list[dict]:
+    """Get comments for a task from task_comments table."""
+    from formaltask.db.connection import DatabaseConnection
+
+    with DatabaseConnection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, text, created_at FROM task_comments WHERE task_id = ? ORDER BY created_at",
+            (task_id,),
+        )
+        return [{"id": r[0], "text": r[1], "created_at": r[2]} for r in cursor.fetchall()]

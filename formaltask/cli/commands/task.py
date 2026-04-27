@@ -8,6 +8,7 @@ _VERBS = {
     "list": ("task_list", "List tasks for an epic"),
     "show": ("task_show", "Show task details"),
     "update": ("task_update", "Update task fields"),
+    "start": ("task_start", "Start a task — open → in_progress"),
     "complete": ("task_complete", "Complete a task with code review"),
     "cancel": ("task_cancel", "Cancel a task"),
     "defer": ("task_defer", "Defer a task with a required reason"),
