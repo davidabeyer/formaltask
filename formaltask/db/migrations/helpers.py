@@ -23,6 +23,7 @@ VALID_TABLES = frozenset(
         "task_reviews",  # renamed from automated_reviews (Task #1883)
         "planning_state",  # Added for Task #2367 - plan_file_path column
         "acceptance_criteria",  # Added for Task #2859 - runnable AC command column
+        "task_comments",  # Added by add_linear_replacement_features migration (linear-to-ft port)
         # task_reflections removed (Task #2759 - dead code, never wired up)
         # pending_decisions removed (Task #2150 - dropped @@@NEEDS_HUMAN infrastructure)
         # plan_documents removed (Task #2248 - dropped ceremony tables)

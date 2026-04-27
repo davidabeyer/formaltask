@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import os
 from dataclasses import dataclass
 
 __all__ = ["CLIContext", "with_repository", "with_db_path"]
@@ -21,11 +22,18 @@ class CLIContext:
 
 
 def resolve_db_path(args: argparse.Namespace) -> str:
-    """Resolve database path from args or default."""
+    """Resolve database path: --db-path flag → FT_DB_PATH env → auto-detect."""
     if getattr(args, "db_path", None):
         from formaltask.db.path import validate_user_db_path
 
         return str(validate_user_db_path(args.db_path))
+
+    env_db_path = os.environ.get("FT_DB_PATH")
+    if env_db_path:
+        from formaltask.db.path import validate_user_db_path
+
+        return str(validate_user_db_path(env_db_path))
+
     from formaltask.db.path import get_db_path
 
     return str(get_db_path())
