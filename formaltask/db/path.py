@@ -15,9 +15,10 @@ def get_db_path() -> Path:
     """Get the canonical path to formaltask.db.
 
     Resolution order:
-    1. PROJECT_ROOT/.claude/formaltask.db (if PROJECT_ROOT env set)
-    2. .task/main_repo -> main_repo/.claude/formaltask.db (worktree)
-    3. cwd/.claude/formaltask.db (fallback)
+    1. FT_DB_PATH env var (linear-to-ft port — direct override for tests, scratch dbs)
+    2. PROJECT_ROOT/.claude/formaltask.db (if PROJECT_ROOT env set)
+    3. .task/main_repo -> main_repo/.claude/formaltask.db (worktree)
+    4. cwd/.claude/formaltask.db (fallback)
 
     Returns:
         Path to formaltask.db
@@ -26,6 +27,15 @@ def get_db_path() -> Path:
         FileNotFoundError: If database doesn't exist
         ValueError: If any path component is a symlink
     """
+    env_db_path = os.environ.get("FT_DB_PATH")
+    if env_db_path:
+        p = Path(env_db_path)
+        if not p.exists():
+            raise FileNotFoundError(f"formaltask.db not found at {p} (FT_DB_PATH env)")
+        if p.is_symlink():
+            raise ValueError(f"Symlink not allowed for database file: {p}")
+        return p
+
     project_root = os.environ.get("PROJECT_ROOT")
     if project_root:
         base_path = Path(project_root)
