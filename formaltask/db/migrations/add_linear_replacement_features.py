@@ -2,6 +2,17 @@
 
 Part of linear-to-ft project — adds features needed to replace Linear.
 Idempotent: safe to run multiple times.
+
+Rollback: SQLite lacks DROP COLUMN before 3.35; this migration has no
+down-migration script. To restore the pre-cutover schema, copy the
+backup taken at cutover time:
+
+    cp ~/claude-code/.claude/formaltask.db.pre-merge-1777538332 \\
+       ~/claude-code/.claude/formaltask.db
+
+A SQL dump (.sql) is also retained at the same path with `.sql` suffix
+for partial-table restores. 30-day retention recommended; rotate to
+cold storage before deleting.
 """
 
 from formaltask.db.connection import DatabaseConnection

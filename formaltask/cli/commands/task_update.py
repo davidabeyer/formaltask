@@ -82,10 +82,10 @@ def execute(db_path: str, args) -> int:
                 "Error: `ft task update` does not change state. Use a dedicated verb:\n"
                 "  --status active         →  ft task start <id>\n"
                 "  --status completed      →  ft task complete <id>\n"
-                "  --status cancelled      →  ft task cancel <id> --reason \"<20+ chars>\"\n"
-                "  --status deferred       →  ft task defer <id> --reason \"<reason>\"\n"
-                "  --status review         →  ft task pending-review <id>\n"
-                "  --status blocked        →  ft task blocked \"<question>\" --task-id <id>\n"
+                '  --status cancelled      →  ft task cancel <id> --reason "<20+ chars>"\n'
+                '  --status deferred       →  ft task defer <id> --reason "<reason>"\n'
+                "  --status review         →  ft task complete <id>  (review folded into complete)\n"
+                '  --status blocked        →  ft work blocked "<question>"  (positional; FT_TASK_ID from env)\n'
                 "  (reset in_progress→open) →  ft task update <id> --reset-status",
                 file=sys.stderr,
             )
@@ -152,8 +152,19 @@ def _validate_task_editable(cursor, task_id: int) -> None:
         raise ValueError(f"Cannot edit cancelled task #{task_id}")
 
 
+# Defense-in-depth: callers in this module pass only literals, but _update_field
+# accepts an arbitrary `field` string and interpolates it into raw SQL. Any future
+# call site with user input could inject. Limit to the columns the wrappers below
+# actually handle.
+UPDATABLE_FIELDS = frozenset({"title", "description", "due_date", "priority"})
+
+
 def _update_field(task_id: int, field: str, new_value: str, db_path: str) -> dict:
     """Update a single task field."""
+    if field not in UPDATABLE_FIELDS:
+        raise ValueError(
+            f"Field '{field}' is not in UPDATABLE_FIELDS allowlist {sorted(UPDATABLE_FIELDS)}"
+        )
     with DatabaseConnection(db_path) as conn:
         cursor = conn.cursor()
         _validate_task_editable(cursor, task_id)
