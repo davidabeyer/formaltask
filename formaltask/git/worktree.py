@@ -175,7 +175,7 @@ def check_worktree_safety(worktree_path: str) -> dict:
     result["checks"]["no_open_pr"] = True
 
     # 6. VERIFY PR WAS MERGED TO MASTER (not feature branch)
-    if has_merged_pr and not merged_to_master:
+    if has_merged_pr and pr_info is not None and not merged_to_master:
         base = pr_info.get("baseRefName", "unknown")
         result["reason"] = f"PR merged to {base}, not master"
         result["checks"]["merged_to_master"] = False
@@ -215,7 +215,7 @@ def check_worktree_safety(worktree_path: str) -> dict:
 
     # ALL CHECKS PASSED
     result["safe"] = True
-    if has_merged_pr:
+    if has_merged_pr and pr_info is not None:
         result["reason"] = f"PR #{pr_info['number']} merged to master"
     else:
         result["reason"] = "All commits in master (ancestry)"
