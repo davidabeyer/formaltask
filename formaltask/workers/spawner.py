@@ -474,9 +474,12 @@ def spawn_worker(
             row = cursor.fetchone()
             feature_branch = row[0] if row and row[0] else None
             base_branch = feature_branch if feature_branch else f"origin/{default_branch}"
+    if base_branch is None:
+        raise ValueError("base_branch must be resolved before spawning worktree")
+    spawn_base_branch: str = base_branch
     try:
         subprocess.run(
-            ["git", "worktree", "add", "-b", branch_name, str(worktree_path), base_branch],
+            ["git", "worktree", "add", "-b", branch_name, str(worktree_path), spawn_base_branch],
             check=True,
             capture_output=True,
             timeout=30,
