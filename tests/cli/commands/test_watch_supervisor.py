@@ -12,7 +12,7 @@ from formaltask.workers import orchestrator as orchestrator_module
 
 @pytest.fixture(autouse=True)
 def mock_orchestration_deps(monkeypatch):
-    """Mock orchestrator deps so spawn cycle doesn't hit real DB/tmux."""
+    """Mock orchestrator deps so spawn cycle doesn't hit real DB/cmux."""
     monkeypatch.setattr(
         orchestrator_module, "evaluate_orchestration_rules", lambda _db, _rules: None
     )
@@ -28,7 +28,7 @@ class TestSupervisorSpawn:
     def test_spawns_supervisor_when_blocked_workers_exist(self, monkeypatch, tmp_path):
         """When blocked workers exist and no supervisor session, spawn supervisor."""
         db_path = str(tmp_path / ".claude" / "formaltask.db")
-        tmux_calls = []
+        cmux_calls = []
 
         def mock_count_running():
             return 0
@@ -46,15 +46,15 @@ class TestSupervisorSpawn:
             return False
 
         def mock_kill_session(name):
-            tmux_calls.append(("kill", name))
+            cmux_calls.append(("kill", name))
             return True
 
         def mock_create_session(name, cwd, env_vars=None, timeout=30):
-            tmux_calls.append(("create", name, cwd, env_vars))
+            cmux_calls.append(("create", name, cwd, env_vars))
             return True
 
         def mock_send_keys(name, keys):
-            tmux_calls.append(("send_keys", name, keys))
+            cmux_calls.append(("send_keys", name, keys))
             return True
 
         # Patch watch_module bindings (used by _daemon_cycle directly)
@@ -63,11 +63,11 @@ class TestSupervisorSpawn:
 
         # Patch orchestrator internals (used by spawn_supervisor_if_needed)
         monkeypatch.setattr(orchestrator_module, "get_blocked_workers", mock_get_blocked)
-        monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-        monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-        monkeypatch.setattr(orchestrator_module.tmux, "kill_session", mock_kill_session)
-        monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
-        monkeypatch.setattr(orchestrator_module.tmux, "send_keys", mock_send_keys)
+        monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+        monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+        monkeypatch.setattr(orchestrator_module.cmux, "kill_session", mock_kill_session)
+        monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
+        monkeypatch.setattr(orchestrator_module.cmux, "send_keys", mock_send_keys)
 
         watch_module._daemon_cycle(
             db_path=db_path,
@@ -78,21 +78,21 @@ class TestSupervisorSpawn:
         )
 
         # Should create supervisor session
-        assert len(tmux_calls) >= 2
-        create_call = [c for c in tmux_calls if c[0] == "create"]
+        assert len(cmux_calls) >= 2
+        create_call = [c for c in cmux_calls if c[0] == "create"]
         assert len(create_call) == 1
         assert create_call[0][1] == "supervisor"
         assert create_call[0][3] == {"SUPERVISOR_UNATTENDED": "1"}
 
         # Should send keys to start claude
-        send_keys_call = [c for c in tmux_calls if c[0] == "send_keys"]
+        send_keys_call = [c for c in cmux_calls if c[0] == "send_keys"]
         assert len(send_keys_call) == 1
         assert "supervisor" in send_keys_call[0][2]
 
     def test_does_not_spawn_supervisor_if_already_running(self, monkeypatch, tmp_path):
         """When supervisor session already exists, do not spawn another."""
         db_path = str(tmp_path / ".claude" / "formaltask.db")
-        tmux_calls = []
+        cmux_calls = []
 
         def mock_count_running():
             return 0
@@ -110,7 +110,7 @@ class TestSupervisorSpawn:
             return True  # Pane is alive
 
         def mock_create_session(name, cwd, env_vars=None, timeout=30):
-            tmux_calls.append(("create", name))
+            cmux_calls.append(("create", name))
             return True
 
         # Patch watch_module bindings
@@ -119,9 +119,9 @@ class TestSupervisorSpawn:
 
         # Patch orchestrator internals
         monkeypatch.setattr(orchestrator_module, "get_blocked_workers", mock_get_blocked)
-        monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-        monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-        monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
+        monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+        monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+        monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
 
         watch_module._daemon_cycle(
             db_path=db_path,
@@ -132,13 +132,13 @@ class TestSupervisorSpawn:
         )
 
         # Should NOT create a new supervisor session
-        create_calls = [c for c in tmux_calls if c[0] == "create"]
+        create_calls = [c for c in cmux_calls if c[0] == "create"]
         assert len(create_calls) == 0
 
     def test_kills_stale_supervisor_session(self, monkeypatch, tmp_path):
         """When supervisor session exists but pane is dead, kill it and respawn."""
         db_path = str(tmp_path / ".claude" / "formaltask.db")
-        tmux_calls = []
+        cmux_calls = []
 
         def mock_count_running():
             return 0
@@ -156,15 +156,15 @@ class TestSupervisorSpawn:
             return False  # But pane is dead (Claude exited)
 
         def mock_kill_session(name):
-            tmux_calls.append(("kill", name))
+            cmux_calls.append(("kill", name))
             return True
 
         def mock_create_session(name, cwd, env_vars=None, timeout=30):
-            tmux_calls.append(("create", name, cwd, env_vars))
+            cmux_calls.append(("create", name, cwd, env_vars))
             return True
 
         def mock_send_keys(name, keys):
-            tmux_calls.append(("send_keys", name, keys))
+            cmux_calls.append(("send_keys", name, keys))
             return True
 
         # Patch watch_module bindings
@@ -173,11 +173,11 @@ class TestSupervisorSpawn:
 
         # Patch orchestrator internals
         monkeypatch.setattr(orchestrator_module, "get_blocked_workers", mock_get_blocked)
-        monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-        monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-        monkeypatch.setattr(orchestrator_module.tmux, "kill_session", mock_kill_session)
-        monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
-        monkeypatch.setattr(orchestrator_module.tmux, "send_keys", mock_send_keys)
+        monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+        monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+        monkeypatch.setattr(orchestrator_module.cmux, "kill_session", mock_kill_session)
+        monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
+        monkeypatch.setattr(orchestrator_module.cmux, "send_keys", mock_send_keys)
 
         watch_module._daemon_cycle(
             db_path=db_path,
@@ -188,11 +188,11 @@ class TestSupervisorSpawn:
         )
 
         # Should kill stale session first
-        kill_calls = [c for c in tmux_calls if c[0] == "kill"]
+        kill_calls = [c for c in cmux_calls if c[0] == "kill"]
         assert len(kill_calls) == 1
         assert kill_calls[0][1] == "supervisor"
 
         # Then create new supervisor session
-        create_calls = [c for c in tmux_calls if c[0] == "create"]
+        create_calls = [c for c in cmux_calls if c[0] == "create"]
         assert len(create_calls) == 1
         assert create_calls[0][1] == "supervisor"

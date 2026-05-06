@@ -76,10 +76,10 @@ def test_watch_spawns_supervisor(monkeypatch, test_db, blocked_task):
     Verifies the complete ERA flow:
     1. Worker blocks with question (task in blocked_user status)
     2. Watch daemon detects blocked worker via get_blocked_workers()
-    3. Watch spawns supervisor tmux session with SUPERVISOR_UNATTENDED=1
+    3. Watch spawns supervisor cmux session with SUPERVISOR_UNATTENDED=1
     4. Supervisor receives /supervisor skill command
     """
-    tmux_calls = []
+    cmux_calls = []
 
     def mock_count_running():
         return 0
@@ -94,15 +94,15 @@ def test_watch_spawns_supervisor(monkeypatch, test_db, blocked_task):
         return False
 
     def mock_kill_session(name):
-        tmux_calls.append(("kill", name))
+        cmux_calls.append(("kill", name))
         return True
 
     def mock_create_session(name, cwd, env_vars=None, timeout=30):
-        tmux_calls.append(("create", name, cwd, env_vars))
+        cmux_calls.append(("create", name, cwd, env_vars))
         return True
 
     def mock_send_keys(name, keys):
-        tmux_calls.append(("send_keys", name, keys))
+        cmux_calls.append(("send_keys", name, keys))
         return True
 
     # Patch watch_module bindings (used by _daemon_cycle directly)
@@ -110,11 +110,11 @@ def test_watch_spawns_supervisor(monkeypatch, test_db, blocked_task):
     monkeypatch.setattr(watch_module, "get_orphaned_workers", mock_get_orphaned)
 
     # Patch orchestrator internals (used by spawn_supervisor_if_needed)
-    monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-    monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-    monkeypatch.setattr(orchestrator_module.tmux, "kill_session", mock_kill_session)
-    monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
-    monkeypatch.setattr(orchestrator_module.tmux, "send_keys", mock_send_keys)
+    monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+    monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+    monkeypatch.setattr(orchestrator_module.cmux, "kill_session", mock_kill_session)
+    monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
+    monkeypatch.setattr(orchestrator_module.cmux, "send_keys", mock_send_keys)
 
     # Verify blocked worker is detected
     blocked = get_blocked_workers(test_db)
@@ -131,13 +131,13 @@ def test_watch_spawns_supervisor(monkeypatch, test_db, blocked_task):
     )
 
     # Verify supervisor session was created
-    create_calls = [c for c in tmux_calls if c[0] == "create"]
+    create_calls = [c for c in cmux_calls if c[0] == "create"]
     assert len(create_calls) == 1, "Should create supervisor session"
     assert create_calls[0][1] == "supervisor"
     assert create_calls[0][3] == {"SUPERVISOR_UNATTENDED": "1"}
 
     # Verify Claude command was sent
-    send_keys_calls = [c for c in tmux_calls if c[0] == "send_keys"]
+    send_keys_calls = [c for c in cmux_calls if c[0] == "send_keys"]
     assert len(send_keys_calls) == 1
     assert "supervisor" in send_keys_calls[0][2]
     assert "/supervisor" in send_keys_calls[0][2]
@@ -151,7 +151,7 @@ def test_idempotent_spawn(monkeypatch, test_db, blocked_task):
     - Supervisor session already running (session_exists returns True)
     - Watch daemon does NOT create another supervisor (no duplicate)
     """
-    tmux_calls = []
+    cmux_calls = []
 
     def mock_count_running():
         return 0
@@ -166,7 +166,7 @@ def test_idempotent_spawn(monkeypatch, test_db, blocked_task):
         return True  # Pane is alive
 
     def mock_create_session(name, cwd, env_vars=None, timeout=30):
-        tmux_calls.append(("create", name))
+        cmux_calls.append(("create", name))
         return True
 
     # Patch watch_module bindings
@@ -174,9 +174,9 @@ def test_idempotent_spawn(monkeypatch, test_db, blocked_task):
     monkeypatch.setattr(watch_module, "get_orphaned_workers", mock_get_orphaned)
 
     # Patch orchestrator internals
-    monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-    monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-    monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
+    monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+    monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+    monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
 
     # Verify blocked worker exists
     blocked = get_blocked_workers(test_db)
@@ -192,7 +192,7 @@ def test_idempotent_spawn(monkeypatch, test_db, blocked_task):
     )
 
     # Verify NO new supervisor session was created
-    create_calls = [c for c in tmux_calls if c[0] == "create"]
+    create_calls = [c for c in cmux_calls if c[0] == "create"]
     assert len(create_calls) == 0, "Should NOT create duplicate supervisor"
 
 
@@ -204,7 +204,7 @@ def test_supervisor_clears_inbox(monkeypatch, test_db):
     - Watch daemon does NOT spawn supervisor (nothing to do)
     - If supervisor was spawned, it would exit immediately with SUPERVISOR_UNATTENDED=1
     """
-    tmux_calls = []
+    cmux_calls = []
 
     def mock_count_running():
         return 0
@@ -219,11 +219,11 @@ def test_supervisor_clears_inbox(monkeypatch, test_db):
         return False
 
     def mock_create_session(name, cwd, env_vars=None, timeout=30):
-        tmux_calls.append(("create", name, env_vars))
+        cmux_calls.append(("create", name, env_vars))
         return True
 
     def mock_send_keys(name, keys):
-        tmux_calls.append(("send_keys", name, keys))
+        cmux_calls.append(("send_keys", name, keys))
         return True
 
     # Patch watch_module bindings
@@ -231,10 +231,10 @@ def test_supervisor_clears_inbox(monkeypatch, test_db):
     monkeypatch.setattr(watch_module, "get_orphaned_workers", mock_get_orphaned)
 
     # Patch orchestrator internals
-    monkeypatch.setattr(orchestrator_module.tmux, "session_exists", mock_session_exists)
-    monkeypatch.setattr(orchestrator_module.tmux, "is_pane_alive", mock_is_pane_alive)
-    monkeypatch.setattr(orchestrator_module.tmux, "create_session", mock_create_session)
-    monkeypatch.setattr(orchestrator_module.tmux, "send_keys", mock_send_keys)
+    monkeypatch.setattr(orchestrator_module.cmux, "session_exists", mock_session_exists)
+    monkeypatch.setattr(orchestrator_module.cmux, "is_pane_alive", mock_is_pane_alive)
+    monkeypatch.setattr(orchestrator_module.cmux, "create_session", mock_create_session)
+    monkeypatch.setattr(orchestrator_module.cmux, "send_keys", mock_send_keys)
 
     # Verify inbox is empty (no blocked workers)
     blocked = get_blocked_workers(test_db)
@@ -251,5 +251,5 @@ def test_supervisor_clears_inbox(monkeypatch, test_db):
 
     # When inbox is empty, watch should NOT spawn supervisor
     # (supervisor would just exit immediately anyway)
-    create_calls = [c for c in tmux_calls if c[0] == "create"]
+    create_calls = [c for c in cmux_calls if c[0] == "create"]
     assert len(create_calls) == 0, "Should NOT spawn supervisor when inbox is empty"
