@@ -24,6 +24,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from formaltask import cmux
 from formaltask.paths import get_claude_home
 
 logger = logging.getLogger(__name__)
@@ -101,6 +102,12 @@ def check_worktree_safety(worktree_path: str) -> dict:
         result["checks"]["no_tmux"] = "unknown"
         return result
     result["checks"]["no_tmux"] = True
+
+    if cmux.session_exists(session_name):
+        result["reason"] = f"Active cmux session: {session_name}"
+        result["checks"]["no_cmux"] = False
+        return result
+    result["checks"]["no_cmux"] = True
 
     # 4. CHECK FOR MERGED PR (source of truth for squash merges)
     rc, pr_json, _ = _run(
