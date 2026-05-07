@@ -1,11 +1,7 @@
 """Worker spawning utilities for FormalTask.
 
-Provides spawn_worker() for creating tmux-based worker sessions.
+Provides spawn_worker() for creating cmux-backed worker sessions.
 Used by pm_spawn.py for the `pm spawn` command.
-
-Implements:
-- Fire-and-forget worker spawning with tmux sessions
-- Retry logic for pane-is-dead errors (Task #2275)
 
 Task #2653: Removed workers table registration (dead code - staleness from transcript mtime)
 Note: Moved from formaltask/cli/commands/parallel_start.py (Task #2646)
@@ -13,6 +9,7 @@ Note: Moved from formaltask/cli/commands/parallel_start.py (Task #2646)
 
 import contextlib
 import logging
+import os
 import re
 import shlex
 import subprocess
@@ -20,11 +17,9 @@ import time
 import uuid
 from pathlib import Path
 
-# Task #2493: Import from consolidated tmux library
-# Task #2746: Use create_session for shared tmux session creation logic
+from formaltask import cmux
 from formaltask.paths import get_claude_home
 from formaltask.state.session import set_current_task
-from formaltask.tmux import create_session, is_pane_alive
 from formaltask.workers.resume import read_and_validate_session_id, verify_session_exists
 
 logger = logging.getLogger(__name__)
@@ -174,14 +169,8 @@ def cleanup_existing_worker(task_id: int) -> None:
         if result.stdout.strip():
             raise ValueError(f"Worktree task-{task_id} has uncommitted changes:\n{result.stdout}")
 
-    # Step 1: Kill existing tmux session
     session_name = f"task-{task_id}"
-    subprocess.run(
-        ["tmux", "kill-session", "-t", session_name],
-        capture_output=True,
-        check=False,
-        timeout=10,
-    )
+    cmux.kill_session(session_name)
 
     # Step 2: Remove worktree with force flag
     subprocess.run(
@@ -203,6 +192,34 @@ def cleanup_existing_worker(task_id: int) -> None:
     # Task #2653: Worker record deletion removed (workers table deleted)
 
 
+def _cleanup_failed_spawn_worktree(worktree_path: str, task_id: int) -> None:
+    if not Path(worktree_path).exists():
+        return
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=worktree_path,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.stdout.strip():
+            logger.warning(
+                f"Worktree task-{task_id} has uncommitted changes that will be lost: "
+                f"{result.stdout[:200]}"
+            )
+    except Exception as status_err:
+        logger.debug("git status check failed during cleanup: %s", status_err)
+
+    with contextlib.suppress(Exception):
+        subprocess.run(
+            ["git", "worktree", "remove", "--force", worktree_path],
+            capture_output=True,
+            timeout=30,
+        )
+
+
 def spawn_tmux_session(
     task_id: int,
     worktree_path: str,
@@ -210,149 +227,71 @@ def spawn_tmux_session(
     project_root: str | None = None,
     resume: bool = False,
 ) -> int:
-    """Spawn tmux session with Claude Code and verify it's alive.
+    """Spawn cmux workspace with Claude Code.
 
-    Implements retry loop for pane-is-dead errors (Task #2275).
-    Cleans up on failure: kills session, removes worktree.
+    Cleans up on failure: closes workspace, removes worktree.
 
     Args:
         task_id: Task ID for session naming and logging.
-        worktree_path: Working directory for the tmux session.
+        worktree_path: Working directory for the cmux workspace.
         session_id: UUID for Claude --session-id flag (or --resume if resume=True).
         project_root: Main repo path for PROJECT_ROOT env var. If None, detected
             via git rev-parse (Task #2586).
         resume: If True, use --resume to resume existing session instead of --session-id.
 
     Returns:
-        int: PID of the tmux pane process.
+        int: PID of the launcher process.
 
     Raises:
-        SpawnError: If spawn fails after MAX_SPAWN_RETRIES attempts.
+        SpawnError: If workspace creation fails.
     """
     session_name = f"task-{task_id}"
-    logger = logging.getLogger(__name__)
     log_file = get_claude_home() / "worker_signals.log"
 
     # Task #2586: Get PROJECT_ROOT for env var passing (fallback to git detection)
     if project_root is None:
         project_root = _get_main_repo_path()
 
-    for attempt in range(1, MAX_SPAWN_RETRIES + 1):
-        subprocess.run(
-            ["tmux", "kill-session", "-t", session_name], capture_output=True, timeout=10
-        )
+    cmux.kill_session(session_name)
 
-        try:
-            # Task #2746: Use shared create_session() for tmux version detection and env var handling
-            env_vars = {"PROJECT_ROOT": project_root}
-            if not create_session(session_name, worktree_path, env_vars=env_vars):
-                raise SpawnError(f"create_session failed for task #{task_id}")
+    try:
+        env_vars = {"PROJECT_ROOT": project_root}
+        if not cmux.create_session(session_name, worktree_path, env_vars=env_vars):
+            raise SpawnError(f"create_session failed for task #{task_id}")
 
-            # Send claude command
-            # NOTE: No 'exec bash' fallback - let pane die if Claude crashes
-            # so retry logic can detect failure via is_pane_alive()
-            trap_cmd = f"trap 'echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) SIGTERM task-{task_id}\" >> {shlex.quote(str(log_file))}' SIGTERM"
-            if resume:
-                resume_msg = (
-                    "RESUME CONTEXT: Your task list (TaskCreate/TaskList) was reset by session restart. "
-                    "Do NOT recreate tasks from the previous session. Continue from where you left off."
-                )
-                claude_cmd = (
-                    f"{trap_cmd}; "
-                    f"set +m; claude --permission-mode bypassPermissions --resume {shlex.quote(session_id)} "
-                    f"{shlex.quote(resume_msg)}"
-                )
-            else:
-                prompt = f"#task:{task_id} - Implement following TDD workflow."
-                claude_cmd = (
-                    f"{trap_cmd}; "
-                    f"set +m; claude --permission-mode bypassPermissions --session-id {shlex.quote(session_id)} "
-                    f"{shlex.quote(prompt)}"
-                )
-            subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, claude_cmd, "Enter"],
-                check=True,
-                timeout=30,
+        trap_cmd = f"trap 'echo \"$(date -u +%Y-%m-%dT%H:%M:%SZ) SIGTERM task-{task_id}\" >> {shlex.quote(str(log_file))}' SIGTERM"
+        if resume:
+            resume_msg = (
+                "RESUME CONTEXT: Your task list (TaskCreate/TaskList) was reset by session restart. "
+                "Do NOT recreate tasks from the previous session. Continue from where you left off."
+            )
+            claude_cmd = (
+                f"{trap_cmd}; "
+                f"set +m; claude --permission-mode bypassPermissions --resume {shlex.quote(session_id)} "
+                f"{shlex.quote(resume_msg)}"
+            )
+        else:
+            prompt = f"#task:{task_id} - Implement following TDD workflow."
+            claude_cmd = (
+                f"{trap_cmd}; "
+                f"set +m; claude --permission-mode bypassPermissions --session-id {shlex.quote(session_id)} "
+                f"{shlex.quote(prompt)}"
             )
 
-            # Wait and verify
-            time.sleep(10.0)
-            if is_pane_alive(session_name):
-                break  # Success
-            # Pane is dead - log warning and retry
-            if attempt < MAX_SPAWN_RETRIES:
-                logger.warning(
-                    f"Pane is dead for task #{task_id}, retry attempt {attempt + 1}/{MAX_SPAWN_RETRIES}"
-                )
-            else:
-                # Max retries exceeded
-                raise SpawnError(
-                    f"Failed to spawn worker for task #{task_id}: pane is dead after {MAX_SPAWN_RETRIES} attempts"
-                )
+        if not cmux.send_keys(session_name, claude_cmd):
+            raise SpawnError(f"send_keys failed for task #{task_id}")
+    except SpawnError as error:
+        with contextlib.suppress(Exception):
+            cmux.kill_session(session_name)
+        _cleanup_failed_spawn_worktree(worktree_path, task_id)
+        raise error
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
+        with contextlib.suppress(Exception):
+            cmux.kill_session(session_name)
+        _cleanup_failed_spawn_worktree(worktree_path, task_id)
+        raise SpawnError(f"Failed to spawn worker for task #{task_id}") from error
 
-        except SpawnError:
-            raise  # Re-raise SpawnError from pane verification failure
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as error:
-            # Cleanup on failure
-            # Kill orphaned tmux session (best-effort)
-            with contextlib.suppress(Exception):
-                subprocess.run(
-                    ["tmux", "kill-session", "-t", session_name],
-                    capture_output=True,
-                    timeout=5,
-                )
-
-            # Clean up worktree if it exists (best-effort)
-            if Path(worktree_path).exists():
-                # Check for uncommitted changes before forced removal
-                try:
-                    result = subprocess.run(
-                        ["git", "status", "--porcelain"],
-                        cwd=worktree_path,
-                        capture_output=True,
-                        text=True,
-                        timeout=10,
-                    )
-                    if result.stdout.strip():
-                        logger.warning(
-                            f"Worktree task-{task_id} has uncommitted changes that will be lost: "
-                            f"{result.stdout[:200]}"
-                        )
-                except Exception as status_err:
-                    logger.debug("git status check failed during cleanup: %s", status_err)
-
-                with contextlib.suppress(Exception):
-                    subprocess.run(
-                        ["git", "worktree", "remove", "--force", worktree_path],
-                        capture_output=True,
-                        timeout=30,
-                    )
-
-            # Task #2653: Worker record deletion removed (workers table deleted)
-
-            raise SpawnError(f"Failed to spawn worker for task #{task_id}") from error
-
-    # Bind F12 to detach
-    subprocess.run(
-        ["tmux", "bind", "-n", "F12", "detach-client"],
-        capture_output=True,
-        timeout=10,
-    )
-
-    # Get and return PID
-    result = subprocess.run(
-        ["tmux", "list-panes", "-t", session_name, "-F", "#{pane_pid}"],
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    try:
-        pid = int(result.stdout.strip())
-    except ValueError as error:
-        raise ValueError(
-            f"Failed to parse PID from tmux output: '{result.stdout.strip()}'"
-        ) from error
-    return pid
+    return os.getpid()
 
 
 def rebase_worktree_onto_target(
@@ -535,9 +474,12 @@ def spawn_worker(
             row = cursor.fetchone()
             feature_branch = row[0] if row and row[0] else None
             base_branch = feature_branch if feature_branch else f"origin/{default_branch}"
+    if base_branch is None:
+        raise ValueError("base_branch must be resolved before spawning worktree")
+    spawn_base_branch: str = base_branch
     try:
         subprocess.run(
-            ["git", "worktree", "add", "-b", branch_name, str(worktree_path), base_branch],
+            ["git", "worktree", "add", "-b", branch_name, str(worktree_path), spawn_base_branch],
             check=True,
             capture_output=True,
             timeout=30,
@@ -633,11 +575,13 @@ def spawn_worker(
             f"TDD Guard setup script not found at {setup_script}, skipping"
         )
 
-    # Task #2336: Use extracted spawn_tmux_session() helper for retry logic and cleanup
     # Pass main_repo to avoid redundant git rev-parse call (Task #2586 simplification)
     pid = spawn_tmux_session(
-        task_id, str(worktree_path), session_id,
-        project_root=main_repo, resume=bool(resumable_session_id),
+        task_id,
+        str(worktree_path),
+        session_id,
+        project_root=main_repo,
+        resume=bool(resumable_session_id),
     )
 
     # Task #2494: Register worktree-to-task mapping for dashboard idle detection

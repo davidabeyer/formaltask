@@ -161,10 +161,13 @@ def _should_chain() -> bool:
 
 
 def _should_skip_review_gates() -> tuple[bool, str | None]:
-    """Check if review gates should be skipped (on default branch).
+    """Check if review gates should be skipped.
 
     Returns:
-        (should_skip, branch_name). skip=True only on default branch.
+        (should_skip, branch_name). skip=True for trusted branches:
+        - Default branch (e.g., master, main): human-trusted internal work.
+        - Runner-spawned branches (`runner/{team}/{name}`): PR creation
+          is deferred to /wrapping-up downstream of task completion.
     """
     from formaltask.git.utils import _run_git_command, get_default_branch
 
@@ -176,7 +179,11 @@ def _should_skip_review_gates() -> tuple[bool, str | None]:
     if branch == "HEAD":  # Detached
         return False, branch
 
-    return (branch == get_default_branch(), branch)
+    if branch == get_default_branch():
+        return True, branch
+    if branch.startswith("runner/"):
+        return True, branch
+    return False, branch
 
 
 def _chain_to_next(db_path: str, task_id: int) -> None:

@@ -24,6 +24,7 @@ import os
 import subprocess
 from pathlib import Path
 
+from formaltask import cmux
 from formaltask.paths import get_claude_home
 
 logger = logging.getLogger(__name__)
@@ -102,6 +103,12 @@ def check_worktree_safety(worktree_path: str) -> dict:
         return result
     result["checks"]["no_tmux"] = True
 
+    if cmux.session_exists(session_name):
+        result["reason"] = f"Active cmux session: {session_name}"
+        result["checks"]["no_cmux"] = False
+        return result
+    result["checks"]["no_cmux"] = True
+
     # 4. CHECK FOR MERGED PR (source of truth for squash merges)
     rc, pr_json, _ = _run(
         [
@@ -168,7 +175,7 @@ def check_worktree_safety(worktree_path: str) -> dict:
     result["checks"]["no_open_pr"] = True
 
     # 6. VERIFY PR WAS MERGED TO MASTER (not feature branch)
-    if has_merged_pr and not merged_to_master:
+    if has_merged_pr and pr_info is not None and not merged_to_master:
         base = pr_info.get("baseRefName", "unknown")
         result["reason"] = f"PR merged to {base}, not master"
         result["checks"]["merged_to_master"] = False
@@ -208,7 +215,7 @@ def check_worktree_safety(worktree_path: str) -> dict:
 
     # ALL CHECKS PASSED
     result["safe"] = True
-    if has_merged_pr:
+    if has_merged_pr and pr_info is not None:
         result["reason"] = f"PR #{pr_info['number']} merged to master"
     else:
         result["reason"] = "All commits in master (ancestry)"

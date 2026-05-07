@@ -170,3 +170,52 @@ class TestEvaluateOrchestrationRules:
             # Second call should NOT trigger again (duplicate prevention)
             evaluate_orchestration_rules(db_path, test_rules)
             assert mock_run.call_count == 1  # Still 1, not 2
+
+
+def test_crash_detector_uses_cmux_adapter_for_live_workers(tmp_path, monkeypatch):
+    from formaltask.workers import crash_detector
+
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL
+        )
+    """)
+    conn.execute("INSERT INTO tasks (id, status) VALUES (17, 'in_progress')")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(crash_detector.cmux, "session_exists", lambda name: name == "task-17")
+    monkeypatch.setattr(crash_detector.cmux, "is_pane_alive", lambda name: name == "task-17")
+
+    def tmux_should_not_be_used(name):
+        raise AssertionError("tmux orphan detection should not run for cmux workers")
+
+    monkeypatch.setattr(crash_detector, "tmux_session_exists", tmux_should_not_be_used)
+    monkeypatch.setattr(crash_detector, "is_pane_alive", tmux_should_not_be_used)
+
+    assert crash_detector.get_orphaned_workers(db_path) == []
+
+
+def test_crash_detector_falls_back_to_tmux_when_cmux_worker_missing(tmp_path, monkeypatch):
+    from formaltask.workers import crash_detector
+
+    db_path = tmp_path / "test.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE tasks (
+            id INTEGER PRIMARY KEY,
+            status TEXT NOT NULL
+        )
+    """)
+    conn.execute("INSERT INTO tasks (id, status) VALUES (18, 'in_progress')")
+    conn.commit()
+    conn.close()
+
+    monkeypatch.setattr(crash_detector.cmux, "session_exists", lambda name: False)
+    monkeypatch.setattr(crash_detector, "tmux_session_exists", lambda name: name == "task-18")
+    monkeypatch.setattr(crash_detector, "is_pane_alive", lambda name: name == "task-18")
+
+    assert crash_detector.get_orphaned_workers(db_path) == []

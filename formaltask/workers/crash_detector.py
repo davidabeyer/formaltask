@@ -3,6 +3,7 @@
 import sqlite3
 from pathlib import Path
 
+from formaltask import cmux
 from formaltask.db.connection import DatabaseConnection
 from formaltask.db.path import get_db_path
 from formaltask.tmux import is_pane_alive
@@ -28,7 +29,10 @@ def get_orphaned_workers(db_path: Path | str | None = None) -> list[int]:
             for row in cursor.fetchall():
                 task_id = row["id"]
                 session_name = f"task-{task_id}"
-                if not tmux_session_exists(session_name) or not is_pane_alive(session_name):
+                if cmux.session_exists(session_name):
+                    if not cmux.is_pane_alive(session_name):
+                        orphaned.append(task_id)
+                elif not tmux_session_exists(session_name) or not is_pane_alive(session_name):
                     orphaned.append(task_id)
             return orphaned
     except sqlite3.Error:

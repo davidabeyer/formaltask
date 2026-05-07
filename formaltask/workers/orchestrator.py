@@ -15,12 +15,11 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
-from formaltask import tmux
+from formaltask import cmux
 from formaltask.core.rules import Rule, apply_rules
 from formaltask.db.connection import DatabaseConnection
 from formaltask.tasks.lifecycle import InvalidTransitionError, transition_task_status
 from formaltask.tasks.spawnability import get_spawnable_tasks
-from formaltask.tmux import get_all_task_sessions
 from formaltask.workers.inbox import get_blocked_workers
 from formaltask.workers.spawner import SpawnError, spawn_worker
 
@@ -120,11 +119,11 @@ def send_notification(message: str) -> None:
 
 
 def count_running_workers() -> int:
-    """Count running workers by tmux sessions (source of truth)."""
+    """Count running workers by cmux workspaces."""
     try:
-        return len(get_all_task_sessions())
+        return len(cmux.get_all_task_sessions())
     except (OSError, ValueError) as e:
-        logger.warning("Failed to count tmux sessions: %s", e)
+        logger.warning("Failed to count cmux workspaces: %s", e)
         return DB_ERROR
 
 
@@ -192,12 +191,11 @@ def spawn_supervisor_if_needed(db_path: str) -> bool:
     Returns True if supervisor was spawned, False otherwise.
     """
     blocked = get_blocked_workers(db_path)
-    supervisor_exists = tmux.session_exists("supervisor")
+    supervisor_exists = cmux.session_exists("supervisor")
 
-    # Clean up stale supervisor (Claude exited but tmux session alive)
-    if supervisor_exists and not tmux.is_pane_alive("supervisor"):
-        logger.info("Killing stale supervisor session (pane dead)")
-        tmux.kill_session("supervisor")
+    if supervisor_exists and not cmux.is_pane_alive("supervisor"):
+        logger.info("Killing stale supervisor workspace")
+        cmux.kill_session("supervisor")
         supervisor_exists = False
 
     if not blocked or supervisor_exists:
@@ -205,14 +203,15 @@ def spawn_supervisor_if_needed(db_path: str) -> bool:
 
     logger.info("Spawning supervisor for %d blocked workers", len(blocked))
     project_root = Path(db_path).parent.parent  # .claude/ -> project root
-    if tmux.create_session(
+    if cmux.create_session(
         "supervisor", cwd=str(project_root), env_vars={"SUPERVISOR_UNATTENDED": "1"}
     ):
-        tmux.send_keys(
+        if cmux.send_keys(
             "supervisor",
             'claude --dangerously-skip-permissions "Run /supervisor skill. Process all blocked workers, then exit when inbox is empty."',
-        )
-        return True
+        ):
+            return True
+        cmux.kill_session("supervisor")
 
     logger.warning("Failed to spawn supervisor, will retry next cycle")
     return False

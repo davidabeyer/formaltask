@@ -13,11 +13,11 @@ import os
 import time
 from datetime import datetime
 
+from formaltask import cmux
 from formaltask.cli.context import with_db_path
 from formaltask.core.rules_builtin import ORCHESTRATION_RULES
 from formaltask.paths import get_claude_home
 from formaltask.tasks.spawnability import get_spawnable_tasks
-from formaltask.tmux import get_all_task_sessions
 from formaltask.workers.crash_detector import get_orphaned_workers
 from formaltask.workers.orchestrator import (
     DB_ERROR,
@@ -43,7 +43,7 @@ def _print_status_block(
     db_path: str, modes: list[str], max_workers: int, interval: int, action: str | None = None
 ):
     """Print the status block with current worker/queue counts."""
-    running = len(get_all_task_sessions())
+    running = len(cmux.get_all_task_sessions())
 
     # Get spawnable count if in spawn mode
     queue_count = 0
