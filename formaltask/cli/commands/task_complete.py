@@ -10,6 +10,7 @@ The pre-merge-commit hook blocks merging if Greptile score < 3.
 
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,7 @@ from formaltask.cli.context import with_db_path
 from formaltask.cli.exit_codes import ExitCode
 from formaltask.cli.output import OutputFormatter
 from formaltask.db.helpers import parse_depends_on
+from formaltask.exceptions import TaskNotFoundError
 from formaltask.tasks import get_task, get_tasks
 from formaltask.tasks.guards import GuardViolation
 from formaltask.workers.resume import resume_worker_in_tmux
@@ -192,8 +194,15 @@ def _should_skip_review_gates(
                 from formaltask.core.completion_config import get_effective_config
                 if get_effective_config(task_id, db_path).required_reviews:
                     return False, branch
-            except Exception:
-                pass  # Conservative: fall through to default skip on DB error
+            except (sqlite3.Error, TaskNotFoundError, OSError) as e:
+                # Conservative: fall through to default skip on DB error.
+                # Programming bugs (ImportError, AttributeError) propagate to the
+                # outer "Unexpected error" handler — silent skip would mask real regressions.
+                logger.warning(
+                    "DB error checking required_reviews for task %d, falling through to skip: %s",
+                    task_id,
+                    e,
+                )
         return True, branch
     return False, branch
 

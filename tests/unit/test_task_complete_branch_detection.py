@@ -298,14 +298,17 @@ class TestRunnerBranchReconciliation:
 
     def test_runner_branch_db_error_falls_through_to_skip(self, db_path, capsys):
         """Runner branch + get_effective_config raises → conservative skip (preserves plumbing-fix behavior)."""
+        import sqlite3
+
         from formaltask.cli.commands import task_complete as tc_module
 
         task_id = _create_task_with_required_reviews(db_path)
 
-        # Make get_effective_config raise; the bare-except in _should_skip_review_gates
-        # falls through to skip=True (conservative default — preserves runner-branch trust)
+        # Make get_effective_config raise a realistic DB exception; the narrowed
+        # except in _should_skip_review_gates falls through to skip=True
+        # (conservative default — preserves runner-branch trust).
         def boom(task_id, db_path):
-            raise RuntimeError(f"simulated DB failure for task {task_id} at {db_path}")
+            raise sqlite3.OperationalError(f"simulated database is locked for task {task_id}")
 
         with (
             patch(
