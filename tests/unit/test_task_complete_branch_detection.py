@@ -267,9 +267,7 @@ class TestRunnerBranchReconciliation:
 
         assert "review" in str(exc_info.value).lower()
 
-    def test_runner_branch_no_metadata_env_default_does_not_skip(
-        self, db_path, monkeypatch
-    ):
+    def test_runner_branch_no_metadata_env_default_does_not_skip(self, db_path, monkeypatch):
         """Runner branch + empty metadata + env-default ['acceptance'] → don't skip."""
         from formaltask.cli.commands.task_complete import task_complete
         from formaltask.core import rules_config

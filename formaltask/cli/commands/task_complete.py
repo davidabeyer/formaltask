@@ -192,6 +192,7 @@ def _should_skip_review_gates(
         if task_id is not None and db_path is not None:
             try:
                 from formaltask.core.completion_config import get_effective_config
+
                 if get_effective_config(task_id, db_path).required_reviews:
                     return False, branch
             except (sqlite3.Error, TaskNotFoundError, OSError) as e:
