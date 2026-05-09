@@ -10,6 +10,7 @@ The pre-merge-commit hook blocks merging if Greptile score < 3.
 
 import logging
 import os
+import sqlite3
 import subprocess
 import sys
 from datetime import UTC, datetime, timedelta
@@ -19,6 +20,7 @@ from formaltask.cli.context import with_db_path
 from formaltask.cli.exit_codes import ExitCode
 from formaltask.cli.output import OutputFormatter
 from formaltask.db.helpers import parse_depends_on
+from formaltask.exceptions import TaskNotFoundError
 from formaltask.tasks import get_task, get_tasks
 from formaltask.tasks.guards import GuardViolation
 from formaltask.workers.resume import resume_worker_in_tmux
@@ -160,14 +162,19 @@ def _should_chain() -> bool:
     return False
 
 
-def _should_skip_review_gates() -> tuple[bool, str | None]:
+def _should_skip_review_gates(
+    task_id: int | None = None,
+    db_path: str | None = None,
+) -> tuple[bool, str | None]:
     """Check if review gates should be skipped.
 
     Returns:
         (should_skip, branch_name). skip=True for trusted branches:
         - Default branch (e.g., master, main): human-trusted internal work.
         - Runner-spawned branches (`runner/{team}/{name}`): PR creation
-          is deferred to /wrapping-up downstream of task completion.
+          is deferred to /wrapping-up downstream of task completion,
+          UNLESS the task's metadata.required_reviews is non-empty —
+          in which case the rules engine fires regardless of branch.
     """
     from formaltask.git.utils import _run_git_command, get_default_branch
 
@@ -182,6 +189,21 @@ def _should_skip_review_gates() -> tuple[bool, str | None]:
     if branch == get_default_branch():
         return True, branch
     if branch.startswith("runner/"):
+        if task_id is not None and db_path is not None:
+            try:
+                from formaltask.core.completion_config import get_effective_config
+
+                if get_effective_config(task_id, db_path).required_reviews:
+                    return False, branch
+            except (sqlite3.Error, TaskNotFoundError, OSError) as e:
+                # Conservative: fall through to default skip on DB error.
+                # Programming bugs (ImportError, AttributeError) propagate to the
+                # outer "Unexpected error" handler — silent skip would mask real regressions.
+                logger.warning(
+                    "DB error checking required_reviews for task %d, falling through to skip: %s",
+                    task_id,
+                    e,
+                )
         return True, branch
     return False, branch
 
@@ -372,7 +394,8 @@ def _complete_task(
 
     # Branch detection: skip review gates when on default branch (Task #2401)
     # Note: Documentation check is now part of check_review_gates_v2 (Task #2614)
-    skip_review_gates, current_branch = _should_skip_review_gates()
+    # Pass task_id + db_path so runner-branch arm can honor metadata.required_reviews (Task #917)
+    skip_review_gates, current_branch = _should_skip_review_gates(task_id, db_path)
     if skip_review_gates:
         print(f"Skipping review gates (on {current_branch} branch)")
 
